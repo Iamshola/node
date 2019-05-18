@@ -66,6 +66,8 @@
       '<(V8_ROOT)/src/inspector/v8-heap-profiler-agent-impl.h',
       '<(V8_ROOT)/src/inspector/v8-inspector-impl.cc',
       '<(V8_ROOT)/src/inspector/v8-inspector-impl.h',
+      '<(V8_ROOT)/src/inspector/v8-inspector-protocol-encoding.cc',
+      '<(V8_ROOT)/src/inspector/v8-inspector-protocol-encoding.h',
       '<(V8_ROOT)/src/inspector/v8-inspector-session-impl.cc',
       '<(V8_ROOT)/src/inspector/v8-inspector-session-impl.h',
       '<(V8_ROOT)/src/inspector/v8-profiler-agent-impl.cc',
