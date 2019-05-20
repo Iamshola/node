@@ -86,6 +86,12 @@
       '<(V8_ROOT)/src/inspector/value-mirror.h',
       '<(V8_ROOT)/src/inspector/wasm-translation.cc',
       '<(V8_ROOT)/src/inspector/wasm-translation.h',
+      # Flat merge `third_party/inspector_protocol:inspector_string_conversions`
+      '<(inspector_path)/v8-string-conversions.cc',
+      '<(inspector_path)/v8-string-conversions.h',
+      # Flat merge `third_party/inspector_protocol:encoding`
+      '<(inspector_protocol_path)/encoding/encoding.cc',
+      '<(inspector_protocol_path)/encoding/encoding.h',
     ]
   },
   'include_dirs': [
