@@ -168,6 +168,11 @@
       '<(V8_ROOT)/include',
     ],
     'conditions': [
+      ['clang', {
+        'cflags!': [ '-Werror', '-Wno-unknown-pragmas' ],
+      },{
+        'cflags!': [ '-Wall', '-Wextra' ],
+      }],
       ['v8_target_arch=="arm"', {
         'defines': [
           'V8_TARGET_ARCH_ARM',
@@ -1400,7 +1405,6 @@
         ],  # conditions
       },  # Release
     },  # configurations
-    'cflags!': [ '-Wall', '-Wextra' ],
     'msvs_disabled_warnings': [
       4129,  # unrecognized character escape sequence (torque-generated)
       4245,  # Conversion with signed/unsigned mismatch.
