@@ -475,6 +475,7 @@
               # mksnapshot needs to know which target OS to use at runtime.  It's weird,
               # but the target OS is really <(OS).
               '--target_os=<(OS)',
+              '--target_arch=<(v8_target_arch)',
             ],
           },
           'inputs': [
@@ -1043,7 +1044,6 @@
         }, {  # v8_enable_i18n_support==0
            'sources!': [
              '<(V8_ROOT)/src/builtins/builtins-intl.cc',
-             '<(V8_ROOT)/src/char-predicates.cc',
              '<(V8_ROOT)/src/objects/intl-objects.cc',
              '<(V8_ROOT)/src/objects/intl-objects.h',
              '<(V8_ROOT)/src/objects/js-break-iterator-inl.h',
@@ -1077,6 +1077,7 @@
              '<(V8_ROOT)/src/objects/js-segmenter.cc',
              '<(V8_ROOT)/src/objects/js-segmenter.h',
              '<(V8_ROOT)/src/runtime/runtime-intl.cc',
+             '<(V8_ROOT)/src/strings/char-predicates.cc',
            ],
          }],
         ['v8_postmortem_support', {
@@ -1618,6 +1619,10 @@
       'sources': [
         '<(V8_ROOT)/src/snapshot/embedded-file-writer.cc',
         '<(V8_ROOT)/src/snapshot/embedded-file-writer.h',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-base.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-base.h',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-generic.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-generic.h',
         '<(V8_ROOT)/src/snapshot/mksnapshot.cc',
       ],
       'conditions': [
