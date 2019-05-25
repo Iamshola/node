@@ -1498,6 +1498,8 @@
         }],
         ['v8_use_perfetto', {
           'sources': [
+            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer-base.cc',
+            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer-base.h',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-json-consumer.cc',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-json-consumer.h',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-producer.cc',
@@ -1619,19 +1621,19 @@
       'sources': [
         '<(V8_ROOT)/src/snapshot/embedded-file-writer.cc',
         '<(V8_ROOT)/src/snapshot/embedded-file-writer.h',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-aix.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-aix.h',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-base.cc',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-base.h',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-generic.cc',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-generic.h',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-mac.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-mac.h',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-win.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-win.h',
         '<(V8_ROOT)/src/snapshot/mksnapshot.cc',
       ],
       'conditions': [
-        ['OS == "fuchsia"', {
-          'defines': ['V8_TARGET_OS_FUCHSIA'],
-        }],
-        ['OS=="win"', {
-          'defines': ['V8_TARGET_OS_WIN'],
-        }],
         ['want_separate_host_toolset', {
           'toolsets': ['host'],
         }],
