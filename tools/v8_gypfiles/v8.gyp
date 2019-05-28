@@ -164,14 +164,17 @@
             '<@(torque_files)',
           ],
           'outputs': [
-            "<(torque_output_root)/torque-generated/builtin-definitions-tq.h",
-            "<(torque_output_root)/torque-generated/field-offsets-tq.h",
-            "<(torque_output_root)/torque-generated/class-verifiers-tq.cc",
-            "<(torque_output_root)/torque-generated/class-verifiers-tq.h",
-            "<(torque_output_root)/torque-generated/objects-printer-tq.cc",
-            "<(torque_output_root)/torque-generated/class-definitions-tq.cc",
-            "<(torque_output_root)/torque-generated/class-definitions-tq-inl.h",
-            "<(torque_output_root)/torque-generated/class-definitions-tq.h",
+            '<(torque_output_root)/torque-generated/builtin-definitions-tq.h',
+            '<(torque_output_root)/torque-generated/field-offsets-tq.h',
+            '<(torque_output_root)/torque-generated/class-verifiers-tq.cc',
+            '<(torque_output_root)/torque-generated/class-verifiers-tq.h',
+            '<(torque_output_root)/torque-generated/objects-printer-tq.cc',
+            '<(torque_output_root)/torque-generated/class-definitions-tq.cc',
+            '<(torque_output_root)/torque-generated/class-definitions-tq-inl.h',
+            '<(torque_output_root)/torque-generated/class-definitions-tq.h',
+            '<(torque_output_root)/torque-generated/exported-macros-assembler-tq.cc',
+            '<(torque_output_root)/torque-generated/exported-macros-assembler-tq.h',
+            '<(torque_output_root)/torque-generated/csa-types-tq.h',
             '<@(torque_outputs)',
           ],
           'action': [
@@ -224,6 +227,9 @@
       ],
       'direct_dependent_settings': {
         'sources': [
+          '<(torque_output_root)/torque-generated/exported-macros-assembler-tq.cc',
+          '<(torque_output_root)/torque-generated/exported-macros-assembler-tq.h',
+          '<(torque_output_root)/torque-generated/csa-types-tq.h',
           '<@(torque_outputs)',
         ],
       }
@@ -494,7 +500,7 @@
                 ],
               },
             }, {
-               'outputs': ['<(V8_ROOT)/src/snapshot/embedded-empty.cc']
+               'outputs': ['<(V8_ROOT)/src/snapshot/embedded/embedded-empty.cc']
              }],
             ['v8_random_seed', {
               'variables': {
@@ -558,7 +564,7 @@
       ],
       'sources': [
         './extras-libraries.cc',
-        '<(V8_ROOT)/src/snapshot/embedded-empty.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/embedded-empty.cc',
         '<(V8_ROOT)/src/snapshot/snapshot-empty.cc',
       ],
       'conditions': [
@@ -626,7 +632,7 @@
       ],
       'direct_dependent_settings': {
         'sources': [
-          '<(V8_ROOT)/src/globals.h',
+          '<(V8_ROOT)/src/common/globals.h',
         ],
       },
     },  # v8_shared_internal_headers
@@ -1498,10 +1504,10 @@
         }],
         ['v8_use_perfetto', {
           'sources': [
-            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer-base.cc',
-            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer-base.h',
-            '<(V8_ROOT)/src/libplatform/tracing/perfetto-json-consumer.cc',
-            '<(V8_ROOT)/src/libplatform/tracing/perfetto-json-consumer.h',
+            '<(V8_ROOT)/src/libplatform/tracing/json-trace-event-listener.cc',
+            '<(V8_ROOT)/src/libplatform/tracing/json-trace-event-listener.h',
+            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer.cc',
+            '<(V8_ROOT)/src/libplatform/tracing/perfetto-consumer.h',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-producer.cc',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-producer.h',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-shared-memory.cc',
@@ -1510,6 +1516,7 @@
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-tasks.h',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-tracing-controller.cc',
             '<(V8_ROOT)/src/libplatform/tracing/perfetto-tracing-controller.h',
+            '<(V8_ROOT)/src/libplatform/tracing/trace-event-listener.h',
           ],
           'dependencies': [
             '<(V8_ROOT)/third_party/perfetto:libperfetto',
@@ -1619,8 +1626,8 @@
         'v8_maybe_icu',
       ],
       'sources': [
-        '<(V8_ROOT)/src/snapshot/embedded-file-writer.cc',
-        '<(V8_ROOT)/src/snapshot/embedded-file-writer.h',
+        '<(V8_ROOT)/src/snapshot/embedded/embedded-file-writer.cc',
+        '<(V8_ROOT)/src/snapshot/embedded/embedded-file-writer.h',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-aix.cc',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-aix.h',
         '<(V8_ROOT)/src/snapshot/embedded/platform-embedded-file-writer-base.cc',
@@ -1722,7 +1729,7 @@
           'sources': [
             # Note: on non-Windows we still build this file so that gyp
             # has some sources to link into the component.
-            '<(V8_ROOT)/src/v8dll-main.cc',
+            '<(V8_ROOT)/src/utils/v8dll-main.cc',
           ],
           'defines': [
             'BUILDING_V8_SHARED',
