@@ -1,4 +1,5 @@
-// Copyright Joyent, Inc. and other Node contributors.
+
+ * V8 7.6: 73// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the
@@ -89,7 +90,7 @@
  * version matching should open a pull request to reserve a number in this
  * registry.
  */
-#define NODE_MODULE_VERSION 72
+#define NODE_MODULE_VERSION 73
 
 // the NAPI_VERSION provided by this version of the runtime
 #define NAPI_VERSION  4
