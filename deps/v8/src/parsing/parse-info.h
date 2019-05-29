@@ -10,12 +10,12 @@
 #include <vector>
 
 #include "include/v8.h"
-#include "src/function-kind.h"
-#include "src/globals.h"
-#include "src/handles.h"
+#include "src/common/globals.h"
+#include "src/handles/handles.h"
+#include "src/objects/function-kind.h"
 #include "src/objects/script.h"
+#include "src/parsing/pending-compilation-error-handler.h"
 #include "src/parsing/preparse-data.h"
-#include "src/pending-compilation-error-handler.h"
 
 namespace v8 {
 
@@ -73,7 +73,6 @@ class V8_EXPORT_PRIVATE ParseInfo {
   FLAG_ACCESSOR(kEager, is_eager, set_eager)
   FLAG_ACCESSOR(kEval, is_eval, set_eval)
   FLAG_ACCESSOR(kStrictMode, is_strict_mode, set_strict_mode)
-  FLAG_ACCESSOR(kNative, is_native, set_native)
   FLAG_ACCESSOR(kModule, is_module, set_module)
   FLAG_ACCESSOR(kAllowLazyParsing, allow_lazy_parsing, set_allow_lazy_parsing)
   FLAG_ACCESSOR(kIsNamedExpression, is_named_expression,
@@ -102,18 +101,12 @@ class V8_EXPORT_PRIVATE ParseInfo {
   FLAG_ACCESSOR(kAllowLazyCompile, allow_lazy_compile, set_allow_lazy_compile)
   FLAG_ACCESSOR(kAllowNativeSyntax, allow_native_syntax,
                 set_allow_native_syntax)
-  FLAG_ACCESSOR(kAllowHarmonyPublicFields, allow_harmony_public_fields,
-                set_allow_harmony_public_fields)
-  FLAG_ACCESSOR(kAllowHarmonyStaticFields, allow_harmony_static_fields,
-                set_allow_harmony_static_fields)
   FLAG_ACCESSOR(kAllowHarmonyDynamicImport, allow_harmony_dynamic_import,
                 set_allow_harmony_dynamic_import)
   FLAG_ACCESSOR(kAllowHarmonyImportMeta, allow_harmony_import_meta,
                 set_allow_harmony_import_meta)
   FLAG_ACCESSOR(kAllowHarmonyNumericSeparator, allow_harmony_numeric_separator,
                 set_allow_harmony_numeric_separator)
-  FLAG_ACCESSOR(kAllowHarmonyPrivateFields, allow_harmony_private_fields,
-                set_allow_harmony_private_fields)
   FLAG_ACCESSOR(kAllowHarmonyPrivateMethods, allow_harmony_private_methods,
                 set_allow_harmony_private_methods)
   FLAG_ACCESSOR(kIsOneshotIIFE, is_oneshot_iife, set_is_oneshot_iife)
@@ -236,8 +229,8 @@ class V8_EXPORT_PRIVATE ParseInfo {
     void Enqueue(ParseInfo* outer_parse_info, const AstRawString* function_name,
                  FunctionLiteral* literal);
 
-    typedef std::forward_list<std::pair<FunctionLiteral*, uintptr_t>>::iterator
-        EnqueuedJobsIterator;
+    using EnqueuedJobsIterator =
+        std::forward_list<std::pair<FunctionLiteral*, uintptr_t>>::iterator;
 
     EnqueuedJobsIterator begin() { return enqueued_jobs_.begin(); }
     EnqueuedJobsIterator end() { return enqueued_jobs_.end(); }

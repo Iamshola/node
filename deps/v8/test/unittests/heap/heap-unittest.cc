@@ -6,18 +6,18 @@
 #include <iostream>
 #include <limits>
 
-#include "src/handles-inl.h"
+#include "src/handles/handles-inl.h"
 #include "src/heap/heap.h"
 #include "src/heap/spaces-inl.h"
-#include "src/objects-inl.h"
+#include "src/objects/objects-inl.h"
 #include "test/unittests/test-utils.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace v8 {
 namespace internal {
 
-typedef TestWithIsolate HeapTest;
-typedef TestWithIsolateAndPointerCompression HeapWithPointerCompressionTest;
+using HeapTest = TestWithIsolate;
+using HeapWithPointerCompressionTest = TestWithIsolateAndPointerCompression;
 
 TEST(Heap, SemiSpaceSize) {
   const size_t MB = static_cast<size_t>(i::MB);

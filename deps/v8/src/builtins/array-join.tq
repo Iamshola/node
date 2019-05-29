@@ -159,7 +159,7 @@ namespace array_join {
       this.AddSeparators(nofSeparators, separatorLength, writeSeparators);
 
       this.totalStringLength =
-          AddStringLength(this.totalStringLength, str.length);
+          AddStringLength(this.totalStringLength, str.length_intptr);
       this.fixedArray =
           StoreAndGrowFixedArray(this.fixedArray, this.index++, str);
       this.isOneByte =
@@ -219,10 +219,10 @@ namespace array_join {
         Signed(len);
     assert(cappedBufferSize > 0);
     return Buffer{
-      AllocateZeroedFixedArray(cappedBufferSize),
-      0,
-      0,
-      IsOneByteStringInstanceType(sep.instanceType)
+      fixedArray: AllocateZeroedFixedArray(cappedBufferSize),
+      index: 0,
+      totalStringLength: 0,
+      isOneByte: IsOneByteStringInstanceType(sep.instanceType)
     };
   }
 
@@ -265,7 +265,7 @@ namespace array_join {
       initialLoadFn: LoadJoinElementFn): String {
     const initialMap: Map = receiver.map;
     const len: uintptr = Convert<uintptr>(lengthNumber);
-    const separatorLength: intptr = sep.length;
+    const separatorLength: intptr = sep.length_intptr;
     let nofSeparators: intptr = 0;
     let loadFn: LoadJoinElementFn = initialLoadFn;
     let buffer: Buffer = NewBuffer(len, sep);
@@ -383,31 +383,31 @@ namespace array_join {
 
     if (IsElementsKindGreaterThan(kind, UINT32_ELEMENTS)) {
       if (kind == INT32_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedInt32Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Int32Elements>;
       } else if (kind == FLOAT32_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedFloat32Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Float32Elements>;
       } else if (kind == FLOAT64_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedFloat64Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Float64Elements>;
       } else if (kind == UINT8_CLAMPED_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedUint8ClampedArray>;
+        loadFn = LoadJoinTypedElement<typed_array::Uint8ClampedElements>;
       } else if (kind == BIGUINT64_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedBigUint64Array>;
+        loadFn = LoadJoinTypedElement<typed_array::BigUint64Elements>;
       } else if (kind == BIGINT64_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedBigInt64Array>;
+        loadFn = LoadJoinTypedElement<typed_array::BigInt64Elements>;
       } else {
         unreachable;
       }
     } else {
       if (kind == UINT8_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedUint8Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Uint8Elements>;
       } else if (kind == INT8_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedInt8Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Int8Elements>;
       } else if (kind == UINT16_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedUint16Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Uint16Elements>;
       } else if (kind == INT16_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedInt16Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Int16Elements>;
       } else if (kind == UINT32_ELEMENTS) {
-        loadFn = LoadJoinTypedElement<FixedUint32Array>;
+        loadFn = LoadJoinTypedElement<typed_array::Uint32Elements>;
       } else {
         unreachable;
       }
@@ -624,7 +624,7 @@ namespace array_join {
     // the algorithm.
     const typedArray: JSTypedArray = typed_array::ValidateTypedArray(
         context, receiver, '%TypedArray%.prototype.join');
-    const length: Smi = typedArray.length;
+    const length = Convert<Number>(typedArray.length);
 
     return CycleProtectedArrayJoin<JSTypedArray>(
         false, typedArray, length, separator, Undefined, Undefined);
@@ -640,7 +640,7 @@ namespace array_join {
     // the algorithm.
     const typedArray: JSTypedArray = typed_array::ValidateTypedArray(
         context, receiver, '%TypedArray%.prototype.toLocaleString');
-    const length: Smi = typedArray.length;
+    const length = Convert<Number>(typedArray.length);
 
     return CycleProtectedArrayJoin<JSTypedArray>(
         true, typedArray, length, ',', locales, options);

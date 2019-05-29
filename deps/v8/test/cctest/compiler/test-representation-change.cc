@@ -7,10 +7,10 @@
 #include "src/compiler/node-matchers.h"
 #include "src/compiler/representation-change.h"
 #include "src/compiler/type-cache.h"
-#include "src/objects-inl.h"
+#include "src/objects/objects-inl.h"
 #include "test/cctest/cctest.h"
 #include "test/cctest/compiler/codegen-tester.h"
-#include "test/cctest/compiler/graph-builder-tester.h"
+#include "test/cctest/compiler/graph-and-builders.h"
 #include "test/cctest/compiler/value-helper.h"
 
 namespace v8 {
@@ -118,13 +118,13 @@ class RepresentationChangerTester : public HandleAndZoneScope,
   }
 };
 
-
 const MachineType kMachineTypes[] = {
-    MachineType::Float32(), MachineType::Float64(),  MachineType::Int8(),
-    MachineType::Uint8(),   MachineType::Int16(),    MachineType::Uint16(),
-    MachineType::Int32(),   MachineType::Uint32(),   MachineType::Int64(),
-    MachineType::Uint64(),  MachineType::AnyTagged()};
-
+    MachineType::Float32(),   MachineType::Float64(),
+    MachineType::Int8(),      MachineType::Uint8(),
+    MachineType::Int16(),     MachineType::Uint16(),
+    MachineType::Int32(),     MachineType::Uint32(),
+    MachineType::Int64(),     MachineType::Uint64(),
+    MachineType::AnyTagged(), MachineType::AnyCompressed()};
 
 TEST(BoolToBit_constant) {
   RepresentationChangerTester r;
@@ -544,7 +544,7 @@ TEST(SingleChanges) {
               Type::Number(), MachineRepresentation::kFloat64);
   CheckChange(IrOpcode::kTruncateTaggedToFloat64,
               MachineRepresentation::kTagged, Type::NumberOrUndefined(),
-              MachineRepresentation::kFloat64);
+              UseInfo(MachineRepresentation::kFloat64, Truncation::Float64()));
   CheckChange(IrOpcode::kChangeTaggedToFloat64, MachineRepresentation::kTagged,
               Type::Signed31(), MachineRepresentation::kFloat64);
 
@@ -629,6 +629,52 @@ TEST(SignednessInWord32) {
       IrOpcode::kCheckedUint32ToInt32, MachineRepresentation::kWord32,
       Type::Unsigned32(),
       UseInfo::CheckedSigned32AsWord32(kIdentifyZeros, VectorSlotPair()));
+}
+
+TEST(CompressedAndTagged) {
+  // Simple Tagged to Compressed
+  CheckChange(IrOpcode::kChangeTaggedToCompressed,
+              MachineRepresentation::kTagged, Type::Any(),
+              MachineRepresentation::kCompressed);
+  CheckChange(IrOpcode::kChangeTaggedPointerToCompressedPointer,
+              MachineRepresentation::kTaggedPointer, Type::Any(),
+              MachineRepresentation::kCompressedPointer);
+  CheckChange(IrOpcode::kChangeTaggedSignedToCompressedSigned,
+              MachineRepresentation::kTaggedSigned, Type::Any(),
+              MachineRepresentation::kCompressedSigned);
+
+  // Simple Compressed to Tagged
+  CheckChange(IrOpcode::kChangeCompressedToTagged,
+              MachineRepresentation::kCompressed, Type::Any(),
+              MachineRepresentation::kTagged);
+  CheckChange(IrOpcode::kChangeCompressedPointerToTaggedPointer,
+              MachineRepresentation::kCompressedPointer, Type::Any(),
+              MachineRepresentation::kTaggedPointer);
+  CheckChange(IrOpcode::kChangeCompressedSignedToTaggedSigned,
+              MachineRepresentation::kCompressedSigned, Type::Any(),
+              MachineRepresentation::kTaggedSigned);
+
+  // Compressed To TaggedSigned
+  CheckChange(IrOpcode::kChangeCompressedToTaggedSigned,
+              MachineRepresentation::kCompressed, Type::SignedSmall(),
+              MachineRepresentation::kTaggedSigned);
+
+  // Tagged To CompressedSigned
+  CheckChange(IrOpcode::kChangeTaggedToCompressedSigned,
+              MachineRepresentation::kTagged, Type::SignedSmall(),
+              MachineRepresentation::kCompressedSigned);
+
+  // TaggedSigned to CompressedPointer
+  CheckChange(IrOpcode::kCheckedTaggedToCompressedPointer,
+              MachineRepresentation::kTaggedSigned, Type::SignedSmall(),
+              UseInfo(MachineRepresentation::kCompressedPointer,
+                      Truncation::Any(), TypeCheckKind::kHeapObject));
+
+  // CompressedSigned to TaggedPointer
+  CheckChange(IrOpcode::kCheckedCompressedToTaggedPointer,
+              MachineRepresentation::kCompressedSigned, Type::SignedSmall(),
+              UseInfo(MachineRepresentation::kTaggedPointer, Truncation::Any(),
+                      TypeCheckKind::kHeapObject));
 }
 
 static void TestMinusZeroCheck(IrOpcode::Value expected, Type from_type) {

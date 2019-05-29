@@ -33,23 +33,13 @@ class PromiseReactionJobTask : public Microtask {
   // a PromiseCapability (general case), or undefined (in case of await).
   DECL_ACCESSORS(promise_or_capability, HeapObject)
 
-// Layout description.
-#define PROMISE_REACTION_JOB_FIELDS(V)       \
-  V(kArgumentOffset, kTaggedSize)            \
-  V(kContextOffset, kTaggedSize)             \
-  V(kHandlerOffset, kTaggedSize)             \
-  V(kPromiseOrCapabilityOffset, kTaggedSize) \
-  /* Total size. */                          \
-  V(kSize, 0)
-
-  DEFINE_FIELD_OFFSET_CONSTANTS(Microtask::kHeaderSize,
-                                PROMISE_REACTION_JOB_FIELDS)
-#undef PROMISE_REACTION_JOB_FIELDS
+  DEFINE_FIELD_OFFSET_CONSTANTS(
+      Microtask::kHeaderSize, TORQUE_GENERATED_PROMISE_REACTION_JOB_TASK_FIELDS)
 
   // Dispatched behavior.
   DECL_CAST(PromiseReactionJobTask)
   DECL_VERIFIER(PromiseReactionJobTask)
-
+  static const int kSizeOfAllPromiseReactionJobTasks = kHeaderSize;
   OBJECT_CONSTRUCTORS(PromiseReactionJobTask, Microtask);
 };
 
@@ -60,6 +50,11 @@ class PromiseFulfillReactionJobTask : public PromiseReactionJobTask {
   DECL_CAST(PromiseFulfillReactionJobTask)
   DECL_PRINTER(PromiseFulfillReactionJobTask)
   DECL_VERIFIER(PromiseFulfillReactionJobTask)
+
+  DEFINE_FIELD_OFFSET_CONSTANTS(
+      PromiseReactionJobTask::kHeaderSize,
+      TORQUE_GENERATED_PROMISE_FULFILL_REACTION_JOB_TASK_FIELDS)
+  STATIC_ASSERT(kSize == kSizeOfAllPromiseReactionJobTasks);
 
   OBJECT_CONSTRUCTORS(PromiseFulfillReactionJobTask, PromiseReactionJobTask);
 };
@@ -72,6 +67,11 @@ class PromiseRejectReactionJobTask : public PromiseReactionJobTask {
   DECL_PRINTER(PromiseRejectReactionJobTask)
   DECL_VERIFIER(PromiseRejectReactionJobTask)
 
+  DEFINE_FIELD_OFFSET_CONSTANTS(
+      PromiseReactionJobTask::kHeaderSize,
+      TORQUE_GENERATED_PROMISE_REJECT_REACTION_JOB_TASK_FIELDS)
+  STATIC_ASSERT(kSize == kSizeOfAllPromiseReactionJobTasks);
+
   OBJECT_CONSTRUCTORS(PromiseRejectReactionJobTask, PromiseReactionJobTask);
 };
 
@@ -83,18 +83,9 @@ class PromiseResolveThenableJobTask : public Microtask {
   DECL_ACCESSORS(then, JSReceiver)
   DECL_ACCESSORS(thenable, JSReceiver)
 
-// Layout description.
-#define PROMISE_RESOLVE_THENABLE_JOB_FIELDS(V) \
-  V(kContextOffset, kTaggedSize)               \
-  V(kPromiseToResolveOffset, kTaggedSize)      \
-  V(kThenOffset, kTaggedSize)                  \
-  V(kThenableOffset, kTaggedSize)              \
-  /* Total size. */                            \
-  V(kSize, 0)
-
-  DEFINE_FIELD_OFFSET_CONSTANTS(Microtask::kHeaderSize,
-                                PROMISE_RESOLVE_THENABLE_JOB_FIELDS)
-#undef PROMISE_RESOLVE_THENABLE_JOB_FIELDS
+  DEFINE_FIELD_OFFSET_CONSTANTS(
+      Microtask::kHeaderSize,
+      TORQUE_GENERATED_PROMISE_RESOLVE_THENABLE_JOB_TASK_FIELDS)
 
   // Dispatched behavior.
   DECL_CAST(PromiseResolveThenableJobTask)

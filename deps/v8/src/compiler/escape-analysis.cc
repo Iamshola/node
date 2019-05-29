@@ -4,12 +4,12 @@
 
 #include "src/compiler/escape-analysis.h"
 
-#include "src/bootstrapper.h"
 #include "src/compiler/linkage.h"
 #include "src/compiler/node-matchers.h"
 #include "src/compiler/operator-properties.h"
 #include "src/compiler/simplified-operator.h"
-#include "src/handles-inl.h"
+#include "src/handles/handles-inl.h"
+#include "src/init/bootstrapper.h"
 #include "src/objects/map-inl.h"
 
 #ifdef DEBUG
@@ -71,7 +71,7 @@ class SparseSidetable {
 // necessary node revisitations happen.
 class ReduceScope {
  public:
-  typedef EffectGraphReducer::Reduction Reduction;
+  using Reduction = EffectGraphReducer::Reduction;
   explicit ReduceScope(Node* node, Reduction* reduction)
       : current_node_(node), reduction_(reduction) {}
 
@@ -96,9 +96,9 @@ class VariableTracker {
  private:
   // The state of all variables at one point in the effect chain.
   class State {
-    typedef PersistentMap<Variable, Node*> Map;
-
    public:
+    using Map = PersistentMap<Variable, Node*>;
+
     explicit State(Zone* zone) : map_(zone) {}
     Node* Get(Variable var) const {
       CHECK(var != Variable::Invalid());
@@ -622,6 +622,7 @@ void ReduceNode(const Operator* op, EscapeAnalysisTracker::Scope* current,
           OffsetOfElementsAccess(op, index).To(&offset) &&
           vobject->FieldAt(offset).To(&var) && current->Get(var).To(&value)) {
         current->SetReplacement(value);
+        break;
       } else if (vobject && !vobject->HasEscaped()) {
         // Compute the known length (aka the number of elements) of {object}
         // based on the virtual object information.

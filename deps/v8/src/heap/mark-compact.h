@@ -33,7 +33,7 @@ template <typename ConcreteState, AccessMode access_mode>
 class MarkingStateBase {
  public:
   V8_INLINE MarkBit MarkBitFrom(HeapObject obj) {
-    return MarkBitFrom(MemoryChunk::FromHeapObject(obj), obj->ptr());
+    return MarkBitFrom(MemoryChunk::FromHeapObject(obj), obj.ptr());
   }
 
   // {addr} may be tagged or aligned.
@@ -273,10 +273,10 @@ class MarkCompactCollectorBase {
       MemoryChunk* chunk, RememberedSetUpdatingMode updating_mode) = 0;
 
   template <class Evacuator, class Collector>
-  void CreateAndExecuteEvacuationTasks(
-      Collector* collector, ItemParallelJob* job,
-      RecordMigratedSlotVisitor* record_visitor,
-      MigrationObserver* migration_observer, const intptr_t live_bytes);
+  void CreateAndExecuteEvacuationTasks(Collector* collector,
+                                       ItemParallelJob* job,
+                                       MigrationObserver* migration_observer,
+                                       const intptr_t live_bytes);
 
   // Returns whether this page should be moved according to heuristics.
   bool ShouldMovePage(Page* p, intptr_t live_bytes);
@@ -414,7 +414,7 @@ struct Ephemeron {
   HeapObject value;
 };
 
-typedef Worklist<Ephemeron, 64> EphemeronWorklist;
+using EphemeronWorklist = Worklist<Ephemeron, 64>;
 
 // Weak objects encountered during marking.
 struct WeakObjects {
@@ -601,7 +601,7 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
   void AbortCompaction();
 
   static inline bool IsOnEvacuationCandidate(Object obj) {
-    return Page::FromAddress(obj->ptr())->IsEvacuationCandidate();
+    return Page::FromAddress(obj.ptr())->IsEvacuationCandidate();
   }
 
   static bool IsOnEvacuationCandidate(MaybeObject obj);
@@ -619,6 +619,8 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
                                    HeapObject target);
   V8_INLINE static void RecordSlot(HeapObject object, HeapObjectSlot slot,
                                    HeapObject target);
+  V8_INLINE static void RecordSlot(MemoryChunk* source_page,
+                                   HeapObjectSlot slot, HeapObject target);
   void RecordLiveSlotsOnPage(Page* page);
 
   void UpdateSlots(SlotsBuffer* buffer);
@@ -629,7 +631,7 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
   // Ensures that sweeping is finished.
   //
   // Note: Can only be called safely from main thread.
-  void EnsureSweepingCompleted();
+  V8_EXPORT_PRIVATE void EnsureSweepingCompleted();
 
   // Checks if sweeping is in progress right now on any space.
   bool sweeping_in_progress() const { return sweeper_->sweeping_in_progress(); }
@@ -701,7 +703,7 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
 #ifdef VERIFY_HEAP
   void VerifyValidStoreAndSlotsBufferEntries();
   void VerifyMarkbitsAreClean();
-  void VerifyMarkbitsAreDirty(PagedSpace* space);
+  void VerifyMarkbitsAreDirty(ReadOnlySpace* space);
   void VerifyMarkbitsAreClean(PagedSpace* space);
   void VerifyMarkbitsAreClean(NewSpace* space);
   void VerifyMarkbitsAreClean(LargeObjectSpace* space);
@@ -765,7 +767,7 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
 
   // Implements ephemeron semantics: Marks value if key is already reachable.
   // Returns true if value was actually marked.
-  bool VisitEphemeron(HeapObject key, HeapObject value);
+  bool ProcessEphemeron(HeapObject key, HeapObject value);
 
   // Marks ephemerons and drains marking worklist iteratively
   // until a fixpoint is reached.
@@ -907,9 +909,11 @@ class MarkCompactCollector final : public MarkCompactCollectorBase {
   MarkingState marking_state_;
   NonAtomicMarkingState non_atomic_marking_state_;
 
-  // Counts the number of mark-compact collections. This is used for marking
-  // descriptor arrays. See NumberOfMarkedDescriptors. Only lower two bits are
-  // used, so it is okay if this counter overflows and wraps around.
+  // Counts the number of major mark-compact collections. The counter is
+  // incremented right after marking. This is used for:
+  // - marking descriptor arrays. See NumberOfMarkedDescriptors. Only the lower
+  //   two bits are used, so it is okay if this counter overflows and wraps
+  //   around.
   unsigned epoch_ = 0;
 
   friend class FullEvacuator;
@@ -923,9 +927,8 @@ class MarkingVisitor final
           int,
           MarkingVisitor<fixed_array_mode, retaining_path_mode, MarkingState>> {
  public:
-  typedef HeapVisitor<
-      int, MarkingVisitor<fixed_array_mode, retaining_path_mode, MarkingState>>
-      Parent;
+  using Parent = HeapVisitor<
+      int, MarkingVisitor<fixed_array_mode, retaining_path_mode, MarkingState>>;
 
   V8_INLINE MarkingVisitor(MarkCompactCollector* collector,
                            MarkingState* marking_state);

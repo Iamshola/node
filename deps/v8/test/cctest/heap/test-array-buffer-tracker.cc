@@ -2,19 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/api-inl.h"
+#include "src/api/api-inl.h"
+#include "src/execution/isolate.h"
 #include "src/heap/array-buffer-tracker.h"
 #include "src/heap/heap-inl.h"
 #include "src/heap/spaces.h"
-#include "src/isolate.h"
-#include "src/objects-inl.h"
 #include "src/objects/js-array-buffer-inl.h"
+#include "src/objects/objects-inl.h"
 #include "test/cctest/cctest.h"
 #include "test/cctest/heap/heap-utils.h"
 
 namespace {
 
-typedef i::LocalArrayBufferTracker LocalTracker;
+using LocalTracker = i::LocalArrayBufferTracker;
 
 bool IsTracked(i::JSArrayBuffer buf) {
   return i::ArrayBufferTracker::IsTracked(buf);
@@ -212,7 +212,7 @@ TEST(ArrayBuffer_NonLivePromotion) {
   {
     v8::HandleScope handle_scope(isolate);
     Handle<FixedArray> root =
-        heap->isolate()->factory()->NewFixedArray(1, TENURED);
+        heap->isolate()->factory()->NewFixedArray(1, AllocationType::kOld);
     {
       v8::HandleScope handle_scope(isolate);
       Local<v8::ArrayBuffer> ab = v8::ArrayBuffer::New(isolate, 100);
@@ -249,7 +249,7 @@ TEST(ArrayBuffer_LivePromotion) {
   {
     v8::HandleScope handle_scope(isolate);
     Handle<FixedArray> root =
-        heap->isolate()->factory()->NewFixedArray(1, TENURED);
+        heap->isolate()->factory()->NewFixedArray(1, AllocationType::kOld);
     {
       v8::HandleScope handle_scope(isolate);
       Local<v8::ArrayBuffer> ab = v8::ArrayBuffer::New(isolate, 100);
@@ -285,7 +285,7 @@ TEST(ArrayBuffer_SemiSpaceCopyThenPagePromotion) {
   {
     v8::HandleScope handle_scope(isolate);
     Handle<FixedArray> root =
-        heap->isolate()->factory()->NewFixedArray(1, TENURED);
+        heap->isolate()->factory()->NewFixedArray(1, AllocationType::kOld);
     {
       v8::HandleScope handle_scope(isolate);
       Local<v8::ArrayBuffer> ab = v8::ArrayBuffer::New(isolate, 100);

@@ -6,24 +6,24 @@
 
 #include "src/asmjs/asm-names.h"
 #include "src/asmjs/asm-parser.h"
-#include "src/assert-scope.h"
 #include "src/ast/ast.h"
 #include "src/base/optional.h"
 #include "src/base/platform/elapsed-timer.h"
-#include "src/compiler.h"
-#include "src/counters.h"
-#include "src/execution.h"
-#include "src/handles.h"
+#include "src/codegen/compiler.h"
+#include "src/codegen/unoptimized-compilation-info.h"
+#include "src/common/assert-scope.h"
+#include "src/execution/execution.h"
+#include "src/execution/isolate.h"
+#include "src/execution/message-template.h"
+#include "src/handles/handles.h"
 #include "src/heap/factory.h"
-#include "src/isolate.h"
-#include "src/message-template.h"
-#include "src/objects-inl.h"
+#include "src/logging/counters.h"
 #include "src/objects/heap-number-inl.h"
+#include "src/objects/objects-inl.h"
 #include "src/parsing/parse-info.h"
 #include "src/parsing/scanner-character-streams.h"
 #include "src/parsing/scanner.h"
-#include "src/unoptimized-compilation-info.h"
-#include "src/vector.h"
+#include "src/utils/vector.h"
 
 #include "src/wasm/wasm-engine.h"
 #include "src/wasm/wasm-js.h"
@@ -42,7 +42,7 @@ namespace {
 Handle<Object> StdlibMathMember(Isolate* isolate, Handle<JSReceiver> stdlib,
                                 Handle<Name> name) {
   Handle<Name> math_name(
-      isolate->factory()->InternalizeOneByteString(StaticCharVector("Math")));
+      isolate->factory()->InternalizeString(StaticCharVector("Math")));
   Handle<Object> math = JSReceiver::GetDataProperty(stdlib, math_name);
   if (!math->IsJSReceiver()) return isolate->factory()->undefined_value();
   Handle<JSReceiver> math_receiver = Handle<JSReceiver>::cast(math);
@@ -68,16 +68,16 @@ bool AreStdlibMembersValid(Isolate* isolate, Handle<JSReceiver> stdlib,
 #define STDLIB_MATH_FUNC(fname, FName, ignore1, ignore2)                   \
   if (members.contains(wasm::AsmJsParser::StandardMember::kMath##FName)) { \
     members.Remove(wasm::AsmJsParser::StandardMember::kMath##FName);       \
-    Handle<Name> name(isolate->factory()->InternalizeOneByteString(        \
-        StaticCharVector(#fname)));                                        \
+    Handle<Name> name(                                                     \
+        isolate->factory()->InternalizeString(StaticCharVector(#fname)));  \
     Handle<Object> value = StdlibMathMember(isolate, stdlib, name);        \
     if (!value->IsJSFunction()) return false;                              \
     SharedFunctionInfo shared = Handle<JSFunction>::cast(value)->shared(); \
-    if (!shared->HasBuiltinId() ||                                         \
-        shared->builtin_id() != Builtins::kMath##FName) {                  \
+    if (!shared.HasBuiltinId() ||                                          \
+        shared.builtin_id() != Builtins::kMath##FName) {                   \
       return false;                                                        \
     }                                                                      \
-    DCHECK_EQ(shared->GetCode(),                                           \
+    DCHECK_EQ(shared.GetCode(),                                            \
               isolate->builtins()->builtin(Builtins::kMath##FName));       \
   }
   STDLIB_MATH_FUNCTION_LIST(STDLIB_MATH_FUNC)
@@ -85,23 +85,23 @@ bool AreStdlibMembersValid(Isolate* isolate, Handle<JSReceiver> stdlib,
 #define STDLIB_MATH_CONST(cname, const_value)                               \
   if (members.contains(wasm::AsmJsParser::StandardMember::kMath##cname)) {  \
     members.Remove(wasm::AsmJsParser::StandardMember::kMath##cname);        \
-    Handle<Name> name(isolate->factory()->InternalizeOneByteString(         \
-        StaticCharVector(#cname)));                                         \
+    Handle<Name> name(                                                      \
+        isolate->factory()->InternalizeString(StaticCharVector(#cname)));   \
     Handle<Object> value = StdlibMathMember(isolate, stdlib, name);         \
     if (!value->IsNumber() || value->Number() != const_value) return false; \
   }
   STDLIB_MATH_VALUE_LIST(STDLIB_MATH_CONST)
 #undef STDLIB_MATH_CONST
-#define STDLIB_ARRAY_TYPE(fname, FName)                                \
-  if (members.contains(wasm::AsmJsParser::StandardMember::k##FName)) { \
-    members.Remove(wasm::AsmJsParser::StandardMember::k##FName);       \
-    *is_typed_array = true;                                            \
-    Handle<Name> name(isolate->factory()->InternalizeOneByteString(    \
-        StaticCharVector(#FName)));                                    \
-    Handle<Object> value = JSReceiver::GetDataProperty(stdlib, name);  \
-    if (!value->IsJSFunction()) return false;                          \
-    Handle<JSFunction> func = Handle<JSFunction>::cast(value);         \
-    if (!func.is_identical_to(isolate->fname())) return false;         \
+#define STDLIB_ARRAY_TYPE(fname, FName)                                   \
+  if (members.contains(wasm::AsmJsParser::StandardMember::k##FName)) {    \
+    members.Remove(wasm::AsmJsParser::StandardMember::k##FName);          \
+    *is_typed_array = true;                                               \
+    Handle<Name> name(                                                    \
+        isolate->factory()->InternalizeString(StaticCharVector(#FName))); \
+    Handle<Object> value = JSReceiver::GetDataProperty(stdlib, name);     \
+    if (!value->IsJSFunction()) return false;                             \
+    Handle<JSFunction> func = Handle<JSFunction>::cast(value);            \
+    if (!func.is_identical_to(isolate->fname())) return false;            \
   }
   STDLIB_ARRAY_TYPE(int8_array_fun, Int8Array)
   STDLIB_ARRAY_TYPE(uint8_array_fun, Uint8Array)
@@ -137,7 +137,7 @@ void ReportCompilationSuccess(Handle<Script> script, int position,
   if (FLAG_suppress_asm_messages || !FLAG_trace_asm_time) return;
   EmbeddedVector<char, 100> text;
   int length = SNPrintF(
-      text, "success, asm->wasm: %0.3f ms, compile: %0.3f ms, %" PRIuS " bytes",
+      text, "success, asm->wasm: %0.3f ms, compile: %0.3f ms, %zu bytes",
       translate_time, compile_time, module_size);
   CHECK_NE(-1, length);
   text.Truncate(length);
@@ -264,7 +264,7 @@ UnoptimizedCompilationJob::Status AsmJsCompilationJob::ExecuteJobImpl() {
   if (FLAG_trace_asm_parser) {
     PrintF(
         "[asm.js translation successful: time=%0.3fms, "
-        "translate_zone=%" PRIuS "KB, compile_zone+=%" PRIuS "KB]\n",
+        "translate_zone=%zuKB, compile_zone+=%zuKB]\n",
         translate_time_, translate_zone_size_ / KB, compile_zone_size / KB);
   }
   return SUCCEEDED;
@@ -355,11 +355,11 @@ MaybeHandle<Object> AsmJs::InstantiateAsmWasm(Isolate* isolate,
   instantiate_timer.Start();
   Handle<HeapNumber> uses_bitset(wasm_data->uses_bitset(), isolate);
   Handle<Script> script(Script::cast(shared->script()), isolate);
+  const auto& wasm_engine = isolate->wasm_engine();
 
   // Allocate the WasmModuleObject.
   Handle<WasmModuleObject> module =
-      isolate->wasm_engine()->FinalizeTranslatedAsmJs(isolate, wasm_data,
-                                                      script);
+      wasm_engine->FinalizeTranslatedAsmJs(isolate, wasm_data, script);
 
   // TODO(mstarzinger): The position currently points to the module definition
   // but should instead point to the instantiation site (more intuitive).
@@ -387,7 +387,7 @@ MaybeHandle<Object> AsmJs::InstantiateAsmWasm(Isolate* isolate,
       ReportInstantiationFailure(script, position, "Requires heap buffer");
       return MaybeHandle<Object>();
     }
-    memory->set_is_growable(false);
+    wasm_engine->memory_tracker()->MarkWasmMemoryNotGrowable(memory);
     size_t size = memory->byte_length();
     // Check the asm.js heap size against the valid limits.
     if (!IsValidAsmjsMemorySize(size)) {
@@ -400,8 +400,7 @@ MaybeHandle<Object> AsmJs::InstantiateAsmWasm(Isolate* isolate,
 
   wasm::ErrorThrower thrower(isolate, "AsmJs::Instantiate");
   MaybeHandle<Object> maybe_module_object =
-      isolate->wasm_engine()->SyncInstantiate(isolate, &thrower, module,
-                                              foreign, memory);
+      wasm_engine->SyncInstantiate(isolate, &thrower, module, foreign, memory);
   if (maybe_module_object.is_null()) {
     // An exception caused by the module start function will be set as pending
     // and bypass the {ErrorThrower}, this happens in case of a stack overflow.
@@ -409,7 +408,7 @@ MaybeHandle<Object> AsmJs::InstantiateAsmWasm(Isolate* isolate,
     if (thrower.error()) {
       ScopedVector<char> error_reason(100);
       SNPrintF(error_reason, "Internal wasm failure: %s", thrower.error_msg());
-      ReportInstantiationFailure(script, position, error_reason.start());
+      ReportInstantiationFailure(script, position, error_reason.begin());
     } else {
       ReportInstantiationFailure(script, position, "Internal wasm failure");
     }

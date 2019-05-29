@@ -7,9 +7,9 @@
 
 #include <memory>
 
-#include "src/globals.h"
-#include "src/handles.h"
-#include "src/vector.h"
+#include "src/common/globals.h"
+#include "src/handles/handles.h"
+#include "src/utils/vector.h"
 #include "src/wasm/signature-map.h"
 #include "src/wasm/wasm-constants.h"
 #include "src/wasm/wasm-opcodes.h"
@@ -72,7 +72,7 @@ struct WasmGlobal {
 
 // Note: An exception signature only uses the params portion of a
 // function signature.
-typedef FunctionSig WasmExceptionSig;
+using WasmExceptionSig = FunctionSig;
 
 // Static representation of a wasm exception type.
 struct WasmException {
@@ -103,8 +103,6 @@ struct WasmTable {
   uint32_t initial_size = 0;      // initial table size.
   uint32_t maximum_size = 0;      // maximum table size.
   bool has_maximum_size = false;  // true if there is a maximum size.
-  // TODO(titzer): Move this to WasmInstance. Needed by interpreter only.
-  std::vector<int32_t> values;  // function table, -1 indicating invalid.
   bool imported = false;        // true if imported.
   bool exported = false;        // true if exported.
 };
@@ -122,7 +120,7 @@ struct WasmElemSegment {
 
   // Used in the {entries} vector to represent a `ref.null` entry in a passive
   // segment.
-  static const uint32_t kNullIndex = ~0u;
+  V8_EXPORT_PRIVATE static const uint32_t kNullIndex = ~0u;
 
   uint32_t table_index;
   WasmInitExpr offset;
@@ -132,17 +130,38 @@ struct WasmElemSegment {
 
 // Static representation of a wasm import.
 struct WasmImport {
-  WireBytesRef module_name;  // module name.
-  WireBytesRef field_name;   // import name.
+  WireBytesRef module_name;   // module name.
+  WireBytesRef field_name;    // import name.
   ImportExportKindCode kind;  // kind of the import.
-  uint32_t index;            // index into the respective space.
+  uint32_t index;             // index into the respective space.
 };
 
 // Static representation of a wasm export.
 struct WasmExport {
-  WireBytesRef name;      // exported name.
+  WireBytesRef name;          // exported name.
   ImportExportKindCode kind;  // kind of the export.
-  uint32_t index;         // index into the respective space.
+  uint32_t index;             // index into the respective space.
+};
+
+enum class WasmCompilationHintStrategy : uint8_t {
+  kDefault = 0,
+  kLazy = 1,
+  kEager = 2,
+  kLazyBaselineEagerTopTier = 3,
+};
+
+enum class WasmCompilationHintTier : uint8_t {
+  kDefault = 0,
+  kInterpreter = 1,
+  kBaseline = 2,
+  kOptimized = 3,
+};
+
+// Static representation of a wasm compilation hint
+struct WasmCompilationHint {
+  WasmCompilationHintStrategy strategy;
+  WasmCompilationHintTier baseline_tier;
+  WasmCompilationHintTier top_tier;
 };
 
 enum ModuleOrigin : uint8_t { kWasmOrigin, kAsmJsOrigin };
@@ -187,6 +206,7 @@ struct V8_EXPORT_PRIVATE WasmModule {
   std::vector<WasmExport> export_table;
   std::vector<WasmException> exceptions;
   std::vector<WasmElemSegment> elem_segments;
+  std::vector<WasmCompilationHint> compilation_hints;
   SignatureMap signature_map;  // canonicalizing map for signature indexes.
 
   ModuleOrigin origin = kWasmOrigin;  // origin of the module
@@ -202,6 +222,14 @@ struct V8_EXPORT_PRIVATE WasmModule {
 };
 
 size_t EstimateStoredSize(const WasmModule* module);
+
+// Returns the number of possible export wrappers for a given module.
+V8_EXPORT_PRIVATE int MaxNumExportWrappers(const WasmModule* module);
+
+// Returns the wrapper index for a function in {module} with signature {sig}
+// and origin defined by {is_import}.
+int GetExportWrapperIndex(const WasmModule* module, const FunctionSig* sig,
+                          bool is_import);
 
 // Interface to the storage (wire bytes) of a wasm module.
 // It is illegal for anyone receiving a ModuleWireBytes to store pointers based
@@ -234,7 +262,7 @@ struct V8_EXPORT_PRIVATE ModuleWireBytes {
   }
 
   Vector<const byte> module_bytes() const { return module_bytes_; }
-  const byte* start() const { return module_bytes_.start(); }
+  const byte* start() const { return module_bytes_.begin(); }
   const byte* end() const { return module_bytes_.end(); }
   size_t length() const { return module_bytes_.length(); }
 
@@ -290,7 +318,7 @@ class TruncatedUserString {
  public:
   template <typename T>
   explicit TruncatedUserString(Vector<T> name)
-      : TruncatedUserString(name.start(), name.length()) {}
+      : TruncatedUserString(name.begin(), name.length()) {}
 
   TruncatedUserString(const byte* start, size_t len)
       : TruncatedUserString(reinterpret_cast<const char*>(start), len) {}

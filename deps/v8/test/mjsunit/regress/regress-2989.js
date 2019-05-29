@@ -25,7 +25,7 @@
 
 if (isNeverOptimizeLiteMode()) {
   print("Warning: skipping test that requires optimization in Lite mode.");
-  quit(0);
+  testRunner.quit(0);
 }
 
 (function ArgumentsObjectChange() {
@@ -33,7 +33,7 @@ if (isNeverOptimizeLiteMode()) {
       x = 42;
       return f.arguments[0];
   }
-
+  %EnsureFeedbackVectorForFunction(f);
   f(0);
   %OptimizeFunctionOnNextCall(f);
   assertEquals(42, f(0));

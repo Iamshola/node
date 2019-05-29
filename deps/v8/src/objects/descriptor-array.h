@@ -5,10 +5,10 @@
 #ifndef V8_OBJECTS_DESCRIPTOR_ARRAY_H_
 #define V8_OBJECTS_DESCRIPTOR_ARRAY_H_
 
-#include "src/objects.h"
 #include "src/objects/fixed-array.h"
+#include "src/objects/objects.h"
 #include "src/objects/struct.h"
-#include "src/utils.h"
+#include "src/utils/utils.h"
 
 // Has to be the last include (doesn't have include guards):
 #include "src/objects/object-macros.h"
@@ -22,18 +22,21 @@ class Handle;
 class Isolate;
 
 // An EnumCache is a pair used to hold keys and indices caches.
-class EnumCache : public Tuple2 {
+class EnumCache : public Struct {
  public:
   DECL_ACCESSORS(keys, FixedArray)
   DECL_ACCESSORS(indices, FixedArray)
 
   DECL_CAST(EnumCache)
 
-  // Layout description.
-  static const int kKeysOffset = kValue1Offset;
-  static const int kIndicesOffset = kValue2Offset;
+  DECL_PRINTER(EnumCache)
+  DECL_VERIFIER(EnumCache)
 
-  OBJECT_CONSTRUCTORS(EnumCache, Tuple2);
+  // Layout description.
+  DEFINE_FIELD_OFFSET_CONSTANTS(Struct::kHeaderSize,
+                                TORQUE_GENERATED_ENUM_CACHE_FIELDS)
+
+  OBJECT_CONSTRUCTORS(EnumCache, Struct);
 };
 
 // A DescriptorArray is a custom array that holds instance descriptors.
@@ -123,9 +126,9 @@ class DescriptorArray : public HeapObject {
 
   // Allocates a DescriptorArray, but returns the singleton
   // empty descriptor array object if number_of_descriptors is 0.
-  static Handle<DescriptorArray> Allocate(
+  V8_EXPORT_PRIVATE static Handle<DescriptorArray> Allocate(
       Isolate* isolate, int nof_descriptors, int slack,
-      AllocationType type = AllocationType::kYoung);
+      AllocationType allocation = AllocationType::kYoung);
 
   void Initialize(EnumCache enum_cache, HeapObject undefined_value,
                   int nof_descriptors, int slack);
@@ -136,20 +139,9 @@ class DescriptorArray : public HeapObject {
   static const int kNotFound = -1;
 
   // Layout description.
-#define DESCRIPTOR_ARRAY_FIELDS(V)                    \
-  V(kNumberOfAllDescriptorsOffset, kUInt16Size)       \
-  V(kNumberOfDescriptorsOffset, kUInt16Size)          \
-  V(kRawNumberOfMarkedDescriptorsOffset, kUInt16Size) \
-  V(kFiller16BitsOffset, kUInt16Size)                 \
-  V(kPointersStartOffset, 0)                          \
-  V(kEnumCacheOffset, kTaggedSize)                    \
-  V(kHeaderSize, 0)
-
   DEFINE_FIELD_OFFSET_CONSTANTS(HeapObject::kHeaderSize,
-                                DESCRIPTOR_ARRAY_FIELDS)
-#undef DESCRIPTOR_ARRAY_FIELDS
-
-  STATIC_ASSERT(IsAligned(kPointersStartOffset, kTaggedSize));
+                                TORQUE_GENERATED_DESCRIPTOR_ARRAY_FIELDS)
+  STATIC_ASSERT(IsAligned(kStartOfWeakFieldsOffset, kTaggedSize));
   STATIC_ASSERT(IsAligned(kHeaderSize, kTaggedSize));
 
   // Garbage collection support.
@@ -171,7 +163,13 @@ class DescriptorArray : public HeapObject {
   inline ObjectSlot GetKeySlot(int descriptor);
   inline MaybeObjectSlot GetValueSlot(int descriptor);
 
-  typedef FlexibleWeakBodyDescriptor<kPointersStartOffset> BodyDescriptor;
+  static_assert(kEndOfStrongFieldsOffset == kStartOfWeakFieldsOffset,
+                "Weak fields follow strong fields.");
+  static_assert(kEndOfWeakFieldsOffset == kHeaderSize,
+                "Weak fields extend up to the end of the header.");
+  // We use this visitor to also visitor to also visit the enum_cache, which is
+  // the only tagged field in the header, and placed at the end of the header.
+  using BodyDescriptor = FlexibleWeakBodyDescriptor<kStartOfStrongFieldsOffset>;
 
   // Layout of descriptor.
   // Naming is consistent with Dictionary classes for easy templating.
@@ -190,7 +188,7 @@ class DescriptorArray : public HeapObject {
 
 #ifdef DEBUG
   // Is the descriptor array sorted and without duplicates?
-  bool IsSortedNoDuplicates(int valid_descriptors = -1);
+  V8_EXPORT_PRIVATE bool IsSortedNoDuplicates(int valid_descriptors = -1);
 
   // Are two DescriptorArrays equal?
   bool IsEqualTo(DescriptorArray other);

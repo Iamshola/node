@@ -5,35 +5,23 @@
 #ifndef V8_WASM_BASELINE_LIFTOFF_COMPILER_H_
 #define V8_WASM_BASELINE_LIFTOFF_COMPILER_H_
 
-#include "src/base/macros.h"
 #include "src/wasm/function-compiler.h"
 
 namespace v8 {
 namespace internal {
 
+class AccountingAllocator;
 class Counters;
 
 namespace wasm {
 
 struct CompilationEnv;
 struct FunctionBody;
-class NativeModule;
 struct WasmFeatures;
 
-class LiftoffCompilationUnit final {
- public:
-  explicit LiftoffCompilationUnit(WasmCompilationUnit* wasm_unit)
-      : wasm_unit_(wasm_unit) {}
-
-  WasmCompilationResult ExecuteCompilation(CompilationEnv*, const FunctionBody&,
-                                           Counters*,
-                                           WasmFeatures* detected_features);
-
- private:
-  WasmCompilationUnit* const wasm_unit_;
-
-  DISALLOW_COPY_AND_ASSIGN(LiftoffCompilationUnit);
-};
+WasmCompilationResult ExecuteLiftoffCompilation(
+    AccountingAllocator*, CompilationEnv*, const FunctionBody&, int func_index,
+    Counters*, WasmFeatures* detected_features);
 
 }  // namespace wasm
 }  // namespace internal

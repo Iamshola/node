@@ -5,7 +5,7 @@
 #ifndef V8_BUILTINS_BUILTINS_ARRAY_GEN_H_
 #define V8_BUILTINS_BUILTINS_ARRAY_GEN_H_
 
-#include "src/code-stub-assembler.h"
+#include "src/codegen/code-stub-assembler.h"
 
 namespace v8 {
 namespace internal {
@@ -14,14 +14,13 @@ class ArrayBuiltinsAssembler : public CodeStubAssembler {
  public:
   explicit ArrayBuiltinsAssembler(compiler::CodeAssemblerState* state);
 
-  typedef std::function<void(ArrayBuiltinsAssembler* masm)>
-      BuiltinResultGenerator;
+  using BuiltinResultGenerator =
+      std::function<void(ArrayBuiltinsAssembler* masm)>;
 
-  typedef std::function<Node*(ArrayBuiltinsAssembler* masm, Node* k_value,
-                              Node* k)>
-      CallResultProcessor;
+  using CallResultProcessor = std::function<Node*(ArrayBuiltinsAssembler* masm,
+                                                  Node* k_value, Node* k)>;
 
-  typedef std::function<void(ArrayBuiltinsAssembler* masm)> PostLoopAction;
+  using PostLoopAction = std::function<void(ArrayBuiltinsAssembler* masm)>;
 
   void FindResultGenerator();
 
@@ -72,13 +71,13 @@ class ArrayBuiltinsAssembler : public CodeStubAssembler {
     TNode<ExternalReference> isolate_ptr =
         ExternalConstant(ExternalReference::isolate_address(isolate()));
     return UncheckedCast<String>(
-        CallCFunction5(MachineType::AnyTagged(),  // <return> String
-                       MachineType::Pointer(),    // Isolate*
-                       MachineType::AnyTagged(),  // FixedArray fixed_array
-                       MachineType::IntPtr(),     // intptr_t length
-                       MachineType::AnyTagged(),  // String sep
-                       MachineType::AnyTagged(),  // String dest
-                       func, isolate_ptr, fixed_array, length, sep, dest));
+        CallCFunction(func,
+                      MachineType::AnyTagged(),  // <return> String
+                      std::make_pair(MachineType::Pointer(), isolate_ptr),
+                      std::make_pair(MachineType::AnyTagged(), fixed_array),
+                      std::make_pair(MachineType::IntPtr(), length),
+                      std::make_pair(MachineType::AnyTagged(), sep),
+                      std::make_pair(MachineType::AnyTagged(), dest)));
   }
 
  protected:

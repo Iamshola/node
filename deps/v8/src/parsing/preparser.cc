@@ -4,16 +4,16 @@
 
 #include <cmath>
 
-#include "src/allocation.h"
 #include "src/base/logging.h"
-#include "src/conversions-inl.h"
-#include "src/conversions.h"
-#include "src/globals.h"
+#include "src/common/globals.h"
+#include "src/numbers/conversions-inl.h"
+#include "src/numbers/conversions.h"
 #include "src/parsing/parser-base.h"
 #include "src/parsing/preparse-data.h"
 #include "src/parsing/preparser.h"
-#include "src/unicode.h"
-#include "src/utils.h"
+#include "src/strings/unicode.h"
+#include "src/utils/allocation.h"
+#include "src/utils/utils.h"
 #include "src/zone/zone-list-inl.h"
 
 namespace v8 {
@@ -345,7 +345,8 @@ PreParser::Expression PreParser::ParseFunctionLiteral(
     }
     if (skippable_function) {
       preparse_data_builder_scope.SetSkippableFunction(
-          function_scope, GetLastFunctionLiteralId() - func_id);
+          function_scope, formals.function_length,
+          GetLastFunctionLiteralId() - func_id);
     }
   }
 
@@ -379,7 +380,7 @@ void PreParser::ParseStatementListAndLogFunction(
   int body_end = scanner()->peek_location().end_pos;
   DCHECK_EQ(this->scope()->is_function_scope(), formals->is_simple);
   log_.LogFunction(body_end, formals->num_parameters(),
-                   GetLastFunctionLiteralId());
+                   formals->function_length, GetLastFunctionLiteralId());
 }
 
 PreParserBlock PreParser::BuildParameterInitializationBlock(

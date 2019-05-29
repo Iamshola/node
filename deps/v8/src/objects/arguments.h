@@ -8,7 +8,7 @@
 #include "src/objects/fixed-array.h"
 #include "src/objects/js-objects.h"
 #include "src/objects/struct.h"
-#include "torque-generated/class-definitions-from-dsl.h"
+#include "torque-generated/field-offsets-tq.h"
 
 // Has to be the last include (doesn't have include guards):
 #include "src/objects/object-macros.h"
@@ -48,14 +48,9 @@ class JSArgumentsObjectWithLength : public JSArgumentsObject {
 // This initial map adds in-object properties for "length" and "callee".
 class JSSloppyArgumentsObject : public JSArgumentsObjectWithLength {
  public:
-// Layout description.
-#define JS_SLOPPY_ARGUMENTS_OBJECT_FIELDS(V) \
-  V(kCalleeOffset, kTaggedSize)              \
-  V(kSize, 0)
-
-  DEFINE_FIELD_OFFSET_CONSTANTS(JSArgumentsObjectWithLength::kSize,
-                                JS_SLOPPY_ARGUMENTS_OBJECT_FIELDS)
-#undef JS_SLOPPY_ARGUMENTS_OBJECT_FIELDS
+  DEFINE_FIELD_OFFSET_CONSTANTS(
+      JSArgumentsObjectWithLength::kSize,
+      TORQUE_GENERATED_JSSLOPPY_ARGUMENTS_OBJECT_FIELDS)
 
   // Indices of in-object properties.
   static const int kCalleeIndex = kLengthIndex + 1;

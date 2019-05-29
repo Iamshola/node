@@ -5,7 +5,7 @@
 #ifndef V8_OBJECTS_FRAME_ARRAY_H_
 #define V8_OBJECTS_FRAME_ARRAY_H_
 
-#include "src/objects.h"
+#include "src/objects/objects.h"
 #include "src/wasm/wasm-objects.h"
 
 // Has to be the last include (doesn't have include guards):
@@ -20,7 +20,7 @@ class Handle;
 #define FRAME_ARRAY_FIELD_LIST(V)     \
   V(WasmInstance, WasmInstanceObject) \
   V(WasmFunctionIndex, Smi)           \
-  V(WasmCodeObject, Foreign)          \
+  V(WasmCodeObject, Object)           \
   V(Receiver, Object)                 \
   V(Function, JSFunction)             \
   V(Code, AbstractCode)               \

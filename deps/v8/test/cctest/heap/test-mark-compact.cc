@@ -37,12 +37,12 @@
 
 #include <utility>
 
-#include "src/v8.h"
+#include "src/init/v8.h"
 
-#include "src/global-handles.h"
+#include "src/handles/global-handles.h"
 #include "src/heap/mark-compact-inl.h"
 #include "src/heap/mark-compact.h"
-#include "src/objects-inl.h"
+#include "src/objects/objects-inl.h"
 #include "test/cctest/cctest.h"
 #include "test/cctest/heap/heap-tester.h"
 #include "test/cctest/heap/heap-utils.h"
@@ -103,8 +103,8 @@ AllocationResult HeapTester::AllocateMapForTest(Isolate* isolate) {
   HeapObject obj;
   AllocationResult alloc = heap->AllocateRaw(Map::kSize, AllocationType::kMap);
   if (!alloc.To(&obj)) return alloc;
-  obj->set_map_after_allocation(ReadOnlyRoots(heap).meta_map(),
-                                SKIP_WRITE_BARRIER);
+  obj.set_map_after_allocation(ReadOnlyRoots(heap).meta_map(),
+                               SKIP_WRITE_BARRIER);
   return isolate->factory()->InitializeMap(Map::cast(obj), JS_OBJECT_TYPE,
                                            JSObject::kHeaderSize,
                                            TERMINAL_FAST_ELEMENTS_KIND, 0);
@@ -113,20 +113,19 @@ AllocationResult HeapTester::AllocateMapForTest(Isolate* isolate) {
 // This is the same as Factory::NewFixedArray, except it doesn't retry
 // on allocation failure.
 AllocationResult HeapTester::AllocateFixedArrayForTest(
-    Heap* heap, int length, PretenureFlag pretenure) {
+    Heap* heap, int length, AllocationType allocation) {
   DCHECK(length >= 0 && length <= FixedArray::kMaxLength);
   int size = FixedArray::SizeFor(length);
-  AllocationSpace space = heap->SelectSpace(pretenure);
   HeapObject obj;
   {
-    AllocationResult result = heap->AllocateRaw(size, Heap::SelectType(space));
+    AllocationResult result = heap->AllocateRaw(size, allocation);
     if (!result.To(&obj)) return result;
   }
-  obj->set_map_after_allocation(ReadOnlyRoots(heap).fixed_array_map(),
-                                SKIP_WRITE_BARRIER);
+  obj.set_map_after_allocation(ReadOnlyRoots(heap).fixed_array_map(),
+                               SKIP_WRITE_BARRIER);
   FixedArray array = FixedArray::cast(obj);
-  array->set_length(length);
-  MemsetTagged(array->data_start(), ReadOnlyRoots(heap).undefined_value(),
+  array.set_length(length);
+  MemsetTagged(array.data_start(), ReadOnlyRoots(heap).undefined_value(),
                length);
   return array;
 }
@@ -140,7 +139,7 @@ HEAP_TEST(MarkCompactCollector) {
   Factory* factory = isolate->factory();
 
   v8::HandleScope sc(CcTest::isolate());
-  Handle<JSGlobalObject> global(isolate->context()->global_object(), isolate);
+  Handle<JSGlobalObject> global(isolate->context().global_object(), isolate);
 
   // call mark-compact when heap is empty
   CcTest::CollectGarbage(OLD_SPACE);
@@ -149,10 +148,12 @@ HEAP_TEST(MarkCompactCollector) {
   const int arraysize = 100;
   AllocationResult allocation;
   do {
-    allocation = AllocateFixedArrayForTest(heap, arraysize, NOT_TENURED);
+    allocation =
+        AllocateFixedArrayForTest(heap, arraysize, AllocationType::kYoung);
   } while (!allocation.IsRetry());
   CcTest::CollectGarbage(NEW_SPACE);
-  AllocateFixedArrayForTest(heap, arraysize, NOT_TENURED).ToObjectChecked();
+  AllocateFixedArrayForTest(heap, arraysize, AllocationType::kYoung)
+      .ToObjectChecked();
 
   // keep allocating maps until it fails
   do {
@@ -357,7 +358,8 @@ TEST(Regress5829) {
   }
   CHECK(marking->IsMarking());
   marking->StartBlackAllocationForTesting();
-  Handle<FixedArray> array = isolate->factory()->NewFixedArray(10, TENURED);
+  Handle<FixedArray> array =
+      isolate->factory()->NewFixedArray(10, AllocationType::kOld);
   Address old_end = array->address() + array->Size();
   // Right trim the array without clearing the mark bits.
   array->set_length(9);
@@ -368,7 +370,7 @@ TEST(Regress5829) {
   IncrementalMarking::MarkingState* marking_state = marking->marking_state();
   for (auto object_and_size :
        LiveObjectRange<kGreyObjects>(page, marking_state->bitmap(page))) {
-    CHECK(!object_and_size.first->IsFiller());
+    CHECK(!object_and_size.first.IsFiller());
   }
 }
 

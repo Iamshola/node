@@ -5,7 +5,7 @@
 #ifndef V8_IC_ACCESSOR_ASSEMBLER_H_
 #define V8_IC_ACCESSOR_ASSEMBLER_H_
 
-#include "src/code-stub-assembler.h"
+#include "src/codegen/code-stub-assembler.h"
 
 namespace v8 {
 namespace internal {
@@ -16,7 +16,7 @@ class CodeAssemblerState;
 
 class ExitPoint;
 
-class AccessorAssembler : public CodeStubAssembler {
+class V8_EXPORT_PRIVATE AccessorAssembler : public CodeStubAssembler {
  public:
   using Node = compiler::Node;
   template <class T>
@@ -282,9 +282,9 @@ class AccessorAssembler : public CodeStubAssembler {
 
   // Low-level helpers.
 
-  typedef std::function<void(Node* code_handler)> OnCodeHandler;
-  typedef std::function<void(Node* properties, Node* name_index)>
-      OnFoundOnReceiver;
+  using OnCodeHandler = std::function<void(Node* code_handler)>;
+  using OnFoundOnReceiver =
+      std::function<void(Node* properties, Node* name_index)>;
 
   template <typename ICHandler, typename ICParameters>
   Node* HandleProtoHandler(const ICParameters* p, Node* handler,
@@ -295,10 +295,6 @@ class AccessorAssembler : public CodeStubAssembler {
   Node* PrepareValueForStore(Node* handler_word, Node* holder,
                              Representation representation, Node* value,
                              Label* bailout);
-
-  void BranchIfPrototypeShouldbeFast(Node* receiver_map,
-                                     Label* prototype_not_fast,
-                                     Label* prototype_fast);
 
   // Extends properties backing store by JSObject::kFieldsAdded elements,
   // returns updated properties backing store.
@@ -311,7 +307,7 @@ class AccessorAssembler : public CodeStubAssembler {
   void EmitFastElementsBoundsCheck(Node* object, Node* elements,
                                    Node* intptr_index,
                                    Node* is_jsarray_condition, Label* miss);
-  void EmitElementLoad(Node* object, Node* elements, Node* elements_kind,
+  void EmitElementLoad(Node* object, Node* elements_kind,
                        SloppyTNode<IntPtrT> key, Node* is_jsarray_condition,
                        Label* if_hole, Label* rebox_double,
                        Variable* var_double_value,
@@ -343,12 +339,12 @@ class AccessorAssembler : public CodeStubAssembler {
 // and then jump to an exit label.
 class ExitPoint {
  private:
-  typedef compiler::Node Node;
-  typedef compiler::CodeAssemblerLabel CodeAssemblerLabel;
-  typedef compiler::CodeAssemblerVariable CodeAssemblerVariable;
+  using Node = compiler::Node;
+  using CodeAssemblerLabel = compiler::CodeAssemblerLabel;
+  using CodeAssemblerVariable = compiler::CodeAssemblerVariable;
 
  public:
-  typedef std::function<void(Node* result)> IndirectReturnHandler;
+  using IndirectReturnHandler = std::function<void(Node* result)>;
 
   explicit ExitPoint(CodeStubAssembler* assembler)
       : ExitPoint(assembler, nullptr) {}

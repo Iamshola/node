@@ -366,7 +366,7 @@ class TorqueLintProcessor(CacheableSourceFileProcessor):
     return name.endswith('.tq')
 
   def GetPathsToSearch(self):
-    dirs = ['third-party', 'src']
+    dirs = ['third_party', 'src']
     test_dirs = ['torque']
     return dirs + [join('test', dir) for dir in test_dirs]
 
@@ -476,7 +476,10 @@ class SourceProcessor(SourceFileProcessor):
                        'zlib.js']
   IGNORE_TABS = IGNORE_COPYRIGHTS + ['unicode-test.js', 'html-comments.js']
 
-  IGNORE_COPYRIGHTS_DIRECTORY = "test/test262/local-tests"
+  IGNORE_COPYRIGHTS_DIRECTORIES = [
+      "test/test262/local-tests",
+      "test/mjsunit/wasm/bulk-memory-spec",
+  ]
 
   def EndOfDeclaration(self, line):
     return line == "}" or line == "};"
@@ -494,7 +497,8 @@ class SourceProcessor(SourceFileProcessor):
         print("%s contains tabs" % name)
         result = False
     if not base in SourceProcessor.IGNORE_COPYRIGHTS and \
-        not SourceProcessor.IGNORE_COPYRIGHTS_DIRECTORY in name:
+        not any(ignore_dir in name for ignore_dir
+                in SourceProcessor.IGNORE_COPYRIGHTS_DIRECTORIES):
       if not COPYRIGHT_HEADER_PATTERN.search(contents):
         print("%s is missing a correct copyright header." % name)
         result = False
@@ -522,7 +526,8 @@ class SourceProcessor(SourceFileProcessor):
       if match:
         print("%s Flags should use '-' (not '_')" % name)
         result = False
-      if not "mjsunit/mjsunit.js" in name:
+      if (not "mjsunit/mjsunit.js" in name and
+          not "mjsunit/mjsunit_numfuzz.js" in name):
         if ASSERT_OPTIMIZED_PATTERN.search(contents) and \
             not FLAGS_ENABLE_OPT.search(contents):
           print("%s Flag --opt should be set if " \
@@ -658,6 +663,7 @@ def PyTests(workspace):
       join(workspace, 'tools', 'clusterfuzz', 'v8_foozzie_test.py'),
       join(workspace, 'tools', 'release', 'test_scripts.py'),
       join(workspace, 'tools', 'unittests', 'run_tests_test.py'),
+      join(workspace, 'tools', 'unittests', 'run_perf_test.py'),
       join(workspace, 'tools', 'testrunner', 'testproc', 'variant_unittest.py'),
     ]:
     print('Running ' + script)

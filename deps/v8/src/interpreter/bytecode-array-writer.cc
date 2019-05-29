@@ -4,7 +4,7 @@
 
 #include "src/interpreter/bytecode-array-writer.h"
 
-#include "src/api-inl.h"
+#include "src/api/api-inl.h"
 #include "src/interpreter/bytecode-jump-table.h"
 #include "src/interpreter/bytecode-label.h"
 #include "src/interpreter/bytecode-node.h"
@@ -12,8 +12,8 @@
 #include "src/interpreter/bytecode-source-info.h"
 #include "src/interpreter/constant-array-builder.h"
 #include "src/interpreter/handler-table-builder.h"
-#include "src/log.h"
-#include "src/objects-inl.h"
+#include "src/logging/log.h"
+#include "src/objects/objects-inl.h"
 
 namespace v8 {
 namespace internal {
@@ -50,11 +50,11 @@ Handle<BytecodeArray> BytecodeArrayWriter::ToBytecodeArray(
       bytecode_size, &bytecodes()->front(), frame_size, parameter_count,
       constant_pool);
   bytecode_array->set_handler_table(*handler_table);
-  // TODO(v8:8510): Need to support native functions that should always have
-  // source positions suppressed and should write empty_byte_array here.
-  if (!source_position_table_builder_.Omit()) {
+  if (!source_position_table_builder_.Lazy()) {
     Handle<ByteArray> source_position_table =
-        source_position_table_builder()->ToSourcePositionTable(isolate);
+        source_position_table_builder_.Omit()
+            ? ReadOnlyRoots(isolate).empty_byte_array_handle()
+            : source_position_table_builder()->ToSourcePositionTable(isolate);
     bytecode_array->set_source_position_table(*source_position_table);
     LOG_CODE_EVENT(isolate, CodeLinePosInfoRecordEvent(
                                 bytecode_array->GetFirstBytecodeAddress(),
@@ -445,7 +445,6 @@ void BytecodeArrayWriter::EmitJump(BytecodeNode* node, BytecodeLabel* label) {
   switch (reserved_operand_size) {
     case OperandSize::kNone:
       UNREACHABLE();
-      break;
     case OperandSize::kByte:
       node->update_operand0(k8BitJumpPlaceholder);
       break;

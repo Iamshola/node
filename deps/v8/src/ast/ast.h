@@ -10,12 +10,12 @@
 #include "src/ast/ast-value-factory.h"
 #include "src/ast/modules.h"
 #include "src/ast/variables.h"
-#include "src/bailout-reason.h"
 #include "src/base/threaded-list.h"
-#include "src/globals.h"
+#include "src/codegen/bailout-reason.h"
+#include "src/codegen/label.h"
+#include "src/common/globals.h"
+#include "src/execution/isolate.h"
 #include "src/heap/factory.h"
-#include "src/isolate.h"
-#include "src/label.h"
 #include "src/objects/literal-objects.h"
 #include "src/objects/smi.h"
 #include "src/parsing/token.h"
@@ -228,7 +228,7 @@ class Expression : public AstNode {
   bool IsSmiLiteral() const;
 
   // True iff the expression is a literal represented as a number.
-  bool IsNumberLiteral() const;
+  V8_EXPORT_PRIVATE bool IsNumberLiteral() const;
 
   // True iff the expression is a string literal.
   bool IsStringLiteral() const;
@@ -422,7 +422,7 @@ class DoExpression final : public Expression {
 
 class Declaration : public AstNode {
  public:
-  typedef base::ThreadedList<Declaration> List;
+  using List = base::ThreadedList<Declaration>;
 
   Variable* var() const { return var_; }
   void set_var(Variable* var) { var_ = var; }
@@ -1300,7 +1300,7 @@ class ObjectLiteralProperty final : public LiteralProperty {
 // for minimizing the work when constructing it at runtime.
 class ObjectLiteral final : public AggregateLiteral {
  public:
-  typedef ObjectLiteralProperty Property;
+  using Property = ObjectLiteralProperty;
 
   Handle<ObjectBoilerplateDescription> boilerplate_description() const {
     DCHECK(!boilerplate_description_.is_null());
@@ -2233,15 +2233,14 @@ class FunctionLiteral final : public Expression {
     return function_literal_id() == kFunctionLiteralIdTopLevel;
   }
   bool is_wrapped() const { return function_type() == kWrapped; }
-  LanguageMode language_mode() const;
+  V8_EXPORT_PRIVATE LanguageMode language_mode() const;
 
   static bool NeedsHomeObject(Expression* expr);
 
-  int expected_property_count() {
-    // Not valid for lazy functions.
-    DCHECK(ShouldEagerCompile());
-    return expected_property_count_;
+  void add_expected_properties(int number_properties) {
+    expected_property_count_ += number_properties;
   }
+  int expected_property_count() { return expected_property_count_; }
   int parameter_count() { return parameter_count_; }
   int function_length() { return function_length_; }
 
@@ -2300,7 +2299,7 @@ class FunctionLiteral final : public Expression {
   // function will be called immediately:
   // - (function() { ... })();
   // - var x = function() { ... }();
-  bool ShouldEagerCompile() const;
+  V8_EXPORT_PRIVATE bool ShouldEagerCompile() const;
   V8_EXPORT_PRIVATE void SetShouldEagerCompile();
 
   FunctionType function_type() const {
@@ -2342,6 +2341,8 @@ class FunctionLiteral final : public Expression {
   bool requires_instance_members_initializer() const {
     return RequiresInstanceMembersInitializer::decode(bit_field_);
   }
+
+  bool requires_brand_initialization() const;
 
   ProducedPreparseData* produced_preparse_data() const {
     return produced_preparse_data_;
@@ -2394,6 +2395,8 @@ class FunctionLiteral final : public Expression {
       : public BitField<bool, RequiresInstanceMembersInitializer::kNext, 1> {};
   class OneshotIIFEBit : public BitField<bool, HasBracesField::kNext, 1> {};
 
+  // expected_property_count_ is the sum of instance fields and properties.
+  // It can vary depending on whether a function is lazily or eagerly parsed.
   int expected_property_count_;
   int parameter_count_;
   int function_length_;
@@ -2434,12 +2437,10 @@ class ClassLiteralProperty final : public LiteralProperty {
   }
 
   void set_private_name_var(Variable* var) {
-    DCHECK_EQ(FIELD, kind());
     DCHECK(is_private());
     private_or_computed_name_var_ = var;
   }
   Variable* private_name_var() const {
-    DCHECK_EQ(FIELD, kind());
     DCHECK(is_private());
     return private_or_computed_name_var_;
   }
@@ -2458,7 +2459,7 @@ class ClassLiteralProperty final : public LiteralProperty {
 
 class InitializeClassMembersStatement final : public Statement {
  public:
-  typedef ClassLiteralProperty Property;
+  using Property = ClassLiteralProperty;
 
   ZonePtrList<Property>* fields() const { return fields_; }
 
@@ -2473,9 +2474,9 @@ class InitializeClassMembersStatement final : public Statement {
 
 class ClassLiteral final : public Expression {
  public:
-  typedef ClassLiteralProperty Property;
+  using Property = ClassLiteralProperty;
 
-  Scope* scope() const { return scope_; }
+  ClassScope* scope() const { return scope_; }
   Variable* class_variable() const { return class_variable_; }
   Expression* extends() const { return extends_; }
   FunctionLiteral* constructor() const { return constructor_; }
@@ -2507,7 +2508,7 @@ class ClassLiteral final : public Expression {
  private:
   friend class AstNodeFactory;
 
-  ClassLiteral(Scope* scope, Variable* class_variable, Expression* extends,
+  ClassLiteral(ClassScope* scope, Variable* class_variable, Expression* extends,
                FunctionLiteral* constructor, ZonePtrList<Property>* properties,
                FunctionLiteral* static_fields_initializer,
                FunctionLiteral* instance_members_initializer_function,
@@ -2530,7 +2531,7 @@ class ClassLiteral final : public Expression {
   }
 
   int end_position_;
-  Scope* scope_;
+  ClassScope* scope_;
   Variable* class_variable_;
   Expression* extends_;
   FunctionLiteral* constructor_;
@@ -2937,6 +2938,13 @@ class AstNodeFactory final {
   }
 
   class ThisExpression* ThisExpression() {
+    // Clear any previously set "parenthesized" flag on this_expression_ so this
+    // particular token does not inherit the it. The flag is used to check
+    // during arrow function head parsing whether we came from parenthesized
+    // exprssion parsing, since additional arrow function verification was done
+    // there. It does not matter whether a flag is unset after arrow head
+    // verification, so clearing at this point is fine.
+    this_expression_->clear_parenthesized();
     return this_expression_;
   }
 
@@ -3225,7 +3233,7 @@ class AstNodeFactory final {
   }
 
   ClassLiteral* NewClassLiteral(
-      Scope* scope, Variable* variable, Expression* extends,
+      ClassScope* scope, Variable* variable, Expression* extends,
       FunctionLiteral* constructor,
       ZonePtrList<ClassLiteral::Property>* properties,
       FunctionLiteral* static_fields_initializer,

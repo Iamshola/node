@@ -5,6 +5,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "src/codegen/machine-type.h"
+#include "src/codegen/optimized-compilation-info.h"
 #include "src/compiler/backend/instruction-selector.h"
 #include "src/compiler/graph.h"
 #include "src/compiler/linkage.h"
@@ -13,11 +15,9 @@
 #include "src/compiler/pipeline.h"
 #include "src/compiler/raw-machine-assembler.h"
 #include "src/compiler/wasm-compiler.h"
-#include "src/machine-type.h"
-#include "src/objects-inl.h"
-#include "src/objects.h"
-#include "src/optimized-compilation-info.h"
-#include "src/simulator.h"
+#include "src/execution/simulator.h"
+#include "src/objects/objects-inl.h"
+#include "src/objects/objects.h"
 #include "src/wasm/wasm-engine.h"
 #include "src/wasm/wasm-features.h"
 #include "src/wasm/wasm-limits.h"
@@ -134,7 +134,7 @@ CallDescriptor* CreateRandomCallDescriptor(Zone* zone, size_t return_count,
   return compiler::GetWasmCallDescriptor(zone, builder.Build());
 }
 
-std::unique_ptr<wasm::NativeModule> AllocateNativeModule(i::Isolate* isolate,
+std::shared_ptr<wasm::NativeModule> AllocateNativeModule(i::Isolate* isolate,
                                                          size_t code_size) {
   std::shared_ptr<wasm::WasmModule> module(new wasm::WasmModule);
   module->num_declared_functions = 1;
@@ -243,9 +243,10 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
                           AssemblerOptions::Default(i_isolate), callee.Export())
                           .ToHandleChecked();
 
-  std::unique_ptr<wasm::NativeModule> module =
+  std::shared_ptr<wasm::NativeModule> module =
       AllocateNativeModule(i_isolate, code->raw_instruction_size());
-  byte* code_start = module->AddCodeForTesting(code)->instructions().start();
+  wasm::WasmCodeRefScope wasm_code_ref_scope;
+  byte* code_start = module->AddCodeForTesting(code)->instructions().begin();
   // Generate wrapper.
   int expect = 0;
 

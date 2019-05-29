@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "src/base/macros.h"
-#include "src/vector.h"
+#include "src/utils/vector.h"
 #include "src/wasm/compilation-environment.h"
 #include "src/wasm/wasm-constants.h"
 #include "src/wasm/wasm-result.h"
@@ -256,7 +256,7 @@ class V8_EXPORT_PRIVATE StreamingDecoder {
 
   uint32_t module_offset() const { return module_offset_; }
 
-  bool deserializing() const { return !compiled_module_bytes_.is_empty(); }
+  bool deserializing() const { return !compiled_module_bytes_.empty(); }
 
   std::unique_ptr<StreamingProcessor> processor_;
   std::unique_ptr<DecodingState> state_;

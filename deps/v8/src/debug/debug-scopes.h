@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "src/debug/debug-frames.h"
-#include "src/frames.h"
+#include "src/execution/frames.h"
 
 namespace v8 {
 namespace internal {
@@ -128,8 +128,8 @@ class ScopeIterator {
 
   void UnwrapEvaluationContext();
 
-  typedef std::function<bool(Handle<String> name, Handle<Object> value)>
-      Visitor;
+  using Visitor =
+      std::function<bool(Handle<String> name, Handle<Object> value)>;
 
   Handle<JSObject> WithContextExtension();
 

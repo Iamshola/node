@@ -6,40 +6,95 @@
 #define V8_HEAP_READ_ONLY_HEAP_H_
 
 #include "src/base/macros.h"
-#include "src/heap/heap.h"
-#include "src/roots.h"
-#include "src/snapshot/read-only-deserializer.h"
+#include "src/objects/heap-object.h"
+#include "src/objects/objects.h"
+#include "src/roots/roots.h"
 
 namespace v8 {
 namespace internal {
 
+class Isolate;
+class Page;
+class ReadOnlyDeserializer;
 class ReadOnlySpace;
 
 // This class transparently manages read-only space, roots and cache creation
-// and destruction. Eventually this will allow sharing these artifacts between
-// isolates.
-class ReadOnlyHeap {
+// and destruction.
+class ReadOnlyHeap final {
  public:
-  static ReadOnlyHeap* GetOrCreateReadOnlyHeap(Heap* heap);
-  // If necessary, deserialize read-only objects and set up read-only object
-  // cache.
-  void MaybeDeserialize(Isolate* isolate, ReadOnlyDeserializer* des);
-  // Frees ReadOnlySpace and itself when sharing is disabled. No-op otherwise.
-  // Read-only data should not be used within the current isolate after this is
-  // called.
+  static constexpr size_t kEntriesCount =
+      static_cast<size_t>(RootIndex::kReadOnlyRootsCount);
+
+  // If necessary creates read-only heap and initializes its artifacts (if
+  // the deserializer is provided). Then attaches the read-only heap to the
+  // isolate.
+  // TODO(v8:7464): Ideally we'd create this without needing a heap.
+  static void SetUp(Isolate* isolate, ReadOnlyDeserializer* des);
+  // Indicates that the isolate has been set up and all read-only space objects
+  // have been created and will not be written to. This is not thread safe, and
+  // should really only be used during snapshot creation or when read-only heap
+  // sharing is disabled.
+  void OnCreateHeapObjectsComplete(Isolate* isolate);
+  // Indicates that the current isolate no longer requires the read-only heap
+  // and it may be safely disposed of.
   void OnHeapTearDown();
 
-  std::vector<Object>* read_only_object_cache() {
-    return &read_only_object_cache_;
-  }
+  // Returns whether the object resides in the read-only space.
+  V8_EXPORT_PRIVATE static bool Contains(HeapObject object);
+  // Gets read-only roots from an appropriate root list: shared read-only root
+  // list if the shared read-only heap has been initialized or the isolate
+  // specific roots table.
+  V8_EXPORT_PRIVATE static ReadOnlyRoots GetReadOnlyRoots(HeapObject object);
+
+  // Clears any shared read-only heap artifacts for testing, forcing read-only
+  // heap to be re-created on next set up.
+  V8_EXPORT_PRIVATE static void ClearSharedHeapForTest();
+
+  // Extends the read-only object cache with new zero smi and returns a
+  // reference to it.
+  Object* ExtendReadOnlyObjectCache();
+  // Returns a read-only cache entry at a particular index.
+  Object cached_read_only_object(size_t i) const;
+  bool read_only_object_cache_is_initialized() const;
+
   ReadOnlySpace* read_only_space() const { return read_only_space_; }
 
  private:
+  // Creates a new read-only heap and attaches it to the provided isolate.
+  static ReadOnlyHeap* CreateAndAttachToIsolate(Isolate* isolate);
+  // Runs the read-only deserailizer and calls InitFromIsolate to complete
+  // read-only heap initialization.
+  void DeseralizeIntoIsolate(Isolate* isolate, ReadOnlyDeserializer* des);
+  // Initializes read-only heap from an already set-up isolate, copying
+  // read-only roots from the isolate. This then seals the space off from
+  // further writes, marks it as read-only and detaches it from the heap (unless
+  // sharing is disabled).
+  void InitFromIsolate(Isolate* isolate);
+
+  bool init_complete_ = false;
   ReadOnlySpace* read_only_space_ = nullptr;
   std::vector<Object> read_only_object_cache_;
 
+#ifdef V8_SHARED_RO_HEAP
+  Address read_only_roots_[kEntriesCount];
+#endif
+
   explicit ReadOnlyHeap(ReadOnlySpace* ro_space) : read_only_space_(ro_space) {}
   DISALLOW_COPY_AND_ASSIGN(ReadOnlyHeap);
+};
+
+// This class enables iterating over all read-only heap objects.
+class V8_EXPORT_PRIVATE ReadOnlyHeapIterator {
+ public:
+  explicit ReadOnlyHeapIterator(ReadOnlyHeap* ro_heap);
+  explicit ReadOnlyHeapIterator(ReadOnlySpace* ro_space);
+
+  HeapObject Next();
+
+ private:
+  ReadOnlySpace* const ro_space_;
+  Page* current_page_;
+  Address current_addr_;
 };
 
 }  // namespace internal

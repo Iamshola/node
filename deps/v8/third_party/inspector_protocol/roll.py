@@ -3,6 +3,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+from __future__ import print_function
 import argparse
 import sys
 import os
@@ -17,6 +18,9 @@ FILES_TO_SYNC = [
     'code_generator.py',
     'concatenate_protocols.py',
     'convert_protocol_to_json.py',
+    'encoding/encoding.h',
+    'encoding/encoding.cc',
+    'encoding/encoding_test.cc',
     'inspector_protocol.gni',
     'inspector_protocol.gypi',
     'lib/*',
@@ -94,11 +98,6 @@ def main(argv):
   parser.add_argument("--v8_src_downstream",
                       help="The V8 src tree.",
                       default="~/v8/v8")
-  parser.add_argument('--reverse', dest='reverse', action='store_true',
-                      help=("Whether to roll the opposite direction, from "
-                            "V8 (downstream) to inspector_protocol "
-                            "(upstream)."))
-  parser.set_defaults(reverse=False)
   parser.add_argument('--force', dest='force', action='store_true',
                       help=("Whether to carry out the modifications "
                             "in the destination tree."))
@@ -115,15 +114,10 @@ def main(argv):
   # Check that the destination Git repo isn't at the master branch - it's
   # generally a bad idea to check into the master branch, so we catch this
   # common pilot error here early.
-  if args.reverse:
-    CheckRepoIsNotAtMasterBranch(upstream)
-    src_dir = os.path.join(downstream, 'third_party/inspector_protocol')
-    dest_dir = upstream
-  else:
-    CheckRepoIsNotAtMasterBranch(downstream)
-    src_dir = upstream
-    dest_dir = os.path.join(downstream, 'third_party/inspector_protocol')
-  print 'Rolling %s into %s ...' % (src_dir, dest_dir)
+  CheckRepoIsNotAtMasterBranch(downstream)
+  src_dir = upstream
+  dest_dir = os.path.join(downstream, 'third_party/inspector_protocol')
+  print('Rolling %s into %s ...' % (src_dir, dest_dir))
   src_files = set(FindFilesToSyncIn(src_dir))
   dest_files = set(FindFilesToSyncIn(dest_dir))
   to_add = [f for f in src_files if f not in dest_files]
@@ -131,31 +125,37 @@ def main(argv):
   to_copy = [f for f in src_files
              if (f in dest_files and not FilesAreEqual(
                  os.path.join(src_dir, f), os.path.join(dest_dir, f)))]
-  print 'To add: %s' % to_add
-  print 'To delete: %s' % to_delete
-  print 'To copy: %s' % to_copy
+  print('To add: %s' % to_add)
+  print('To delete: %s' % to_delete)
+  print('To copy: %s' % to_copy)
   if not to_add and not to_delete and not to_copy:
-    print 'Nothing to do. You\'re good.'
+    print('Nothing to do. You\'re good.')
     sys.exit(0)
   if not args.force:
-    print 'Rerun with --force if you wish the modifications to be done.'
+    print('Rerun with --force if you wish the modifications to be done.')
     sys.exit(1)
-  print 'You said --force ... as you wish, modifying the destination.'
+  print('You said --force ... as you wish, modifying the destination.')
   for f in to_add + to_copy:
-    shutil.copyfile(os.path.join(src_dir, f), os.path.join(dest_dir, f))
+    contents = open(os.path.join(src_dir, f)).read()
+    contents = contents.replace(
+        'INSPECTOR_PROTOCOL_ENCODING_ENCODING_H_',
+        'V8_INSPECTOR_PROTOCOL_ENCODING_ENCODING_H_')
+    contents = contents.replace(
+        'namespace inspector_protocol_encoding',
+        'namespace v8_inspector_protocol_encoding')
+    open(os.path.join(dest_dir, f), 'w').write(contents)
     shutil.copymode(os.path.join(src_dir, f), os.path.join(dest_dir, f))
   for f in to_delete:
     os.unlink(os.path.join(dest_dir, f))
-  if not args.reverse:
-    head_revision = GetHeadRevision(upstream)
-    lines = open(os.path.join(dest_dir, 'README.v8')).readlines()
-    f = open(os.path.join(dest_dir, 'README.v8'), 'w')
-    for line in lines:
-      if line.startswith('Revision: '):
-        f.write('Revision: %s' % head_revision)
-      else:
-        f.write(line)
-    f.close()
+  head_revision = GetHeadRevision(upstream)
+  lines = open(os.path.join(dest_dir, 'README.v8')).readlines()
+  f = open(os.path.join(dest_dir, 'README.v8'), 'w')
+  for line in lines:
+    if line.startswith('Revision: '):
+      f.write('Revision: %s' % head_revision)
+    else:
+      f.write(line)
+  f.close()
 
 
 if __name__ == '__main__':

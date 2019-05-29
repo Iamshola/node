@@ -5,7 +5,7 @@
 #ifndef V8_REGEXP_REGEXP_MACRO_ASSEMBLER_H_
 #define V8_REGEXP_REGEXP_MACRO_ASSEMBLER_H_
 
-#include "src/label.h"
+#include "src/codegen/label.h"
 #include "src/regexp/regexp-ast.h"
 
 namespace v8 {
@@ -244,9 +244,11 @@ class NativeRegExpMacroAssembler: public RegExpMacroAssembler {
   }
 
   // Returns a {Result} sentinel, or the number of successful matches.
-  static int Execute(Code code, String input, int start_offset,
-                     const byte* input_start, const byte* input_end,
-                     int* output, int output_size, Isolate* isolate);
+  V8_EXPORT_PRIVATE static int Execute(Code code, String input,
+                                       int start_offset,
+                                       const byte* input_start,
+                                       const byte* input_end, int* output,
+                                       int output_size, Isolate* isolate);
 };
 
 }  // namespace internal

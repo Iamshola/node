@@ -5,8 +5,8 @@
 #ifndef V8_OBJECTS_INSTANCE_TYPE_H_
 #define V8_OBJECTS_INSTANCE_TYPE_H_
 
-#include "src/elements-kind.h"
-#include "src/objects-definitions.h"
+#include "src/objects/elements-kind.h"
+#include "src/objects/objects-definitions.h"
 
 // Has to be the last include (doesn't have include guards):
 #include "src/objects/object-macros.h"
@@ -15,26 +15,14 @@ namespace v8 {
 namespace internal {
 
 // We use the full 16 bits of the instance_type field to encode heap object
-// instance types. All the high-order bits (bit 6-15) are cleared if the object
+// instance types. All the high-order bits (bits 6-15) are cleared if the object
 // is a string, and contain set bits if it is not a string.
-const uint32_t kIsNotStringMask = 0xffc0;
+const uint32_t kIsNotStringMask = ~((1 << 6) - 1);
 const uint32_t kStringTag = 0x0;
 
-// Bit 5 indicates that the object is an internalized string (if not set) or
-// not (if set). Bit 7 has to be clear as well.
-const uint32_t kIsNotInternalizedMask = 0x20;
-const uint32_t kNotInternalizedTag = 0x20;
-const uint32_t kInternalizedTag = 0x0;
-
-// If bit 7 is clear then bit 3 indicates whether the string consists of
-// two-byte characters or one-byte characters.
-const uint32_t kStringEncodingMask = 0x8;
-const uint32_t kTwoByteStringTag = 0x0;
-const uint32_t kOneByteStringTag = 0x8;
-
-// If bit 7 is clear, the low-order 3 bits indicate the representation
-// of the string.
-const uint32_t kStringRepresentationMask = 0x07;
+// For strings, bits 0-2 indicate the representation of the string. In
+// particular, bit 0 indicates whether the string is direct or indirect.
+const uint32_t kStringRepresentationMask = (1 << 3) - 1;
 enum StringRepresentationTag {
   kSeqStringTag = 0x0,
   kConsStringTag = 0x1,
@@ -42,20 +30,32 @@ enum StringRepresentationTag {
   kSlicedStringTag = 0x3,
   kThinStringTag = 0x5
 };
-const uint32_t kIsIndirectStringMask = 0x1;
-const uint32_t kIsIndirectStringTag = 0x1;
-STATIC_ASSERT((kSeqStringTag & kIsIndirectStringMask) == 0);       // NOLINT
-STATIC_ASSERT((kExternalStringTag & kIsIndirectStringMask) == 0);  // NOLINT
-STATIC_ASSERT((kConsStringTag & kIsIndirectStringMask) ==
-              kIsIndirectStringTag);  // NOLINT
+const uint32_t kIsIndirectStringMask = 1 << 0;
+const uint32_t kIsIndirectStringTag = 1 << 0;
+STATIC_ASSERT((kSeqStringTag & kIsIndirectStringMask) == 0);
+STATIC_ASSERT((kExternalStringTag & kIsIndirectStringMask) == 0);
+STATIC_ASSERT((kConsStringTag & kIsIndirectStringMask) == kIsIndirectStringTag);
 STATIC_ASSERT((kSlicedStringTag & kIsIndirectStringMask) ==
-              kIsIndirectStringTag);  // NOLINT
+              kIsIndirectStringTag);
 STATIC_ASSERT((kThinStringTag & kIsIndirectStringMask) == kIsIndirectStringTag);
 
-// If bit 6 is clear and string representation indicates an external string,
-// then bit 5 indicates whether the data pointer is cached.
-const uint32_t kUncachedExternalStringMask = 0x10;
-const uint32_t kUncachedExternalStringTag = 0x10;
+// For strings, bit 3 indicates whether the string consists of two-byte
+// characters or one-byte characters.
+const uint32_t kStringEncodingMask = 1 << 3;
+const uint32_t kTwoByteStringTag = 0;
+const uint32_t kOneByteStringTag = 1 << 3;
+
+// For strings, bit 4 indicates whether the data pointer of an external string
+// is cached. Note that the string representation is expected to be
+// kExternalStringTag.
+const uint32_t kUncachedExternalStringMask = 1 << 4;
+const uint32_t kUncachedExternalStringTag = 1 << 4;
+
+// For strings, bit 5 indicates that the string is internalized (if not set) or
+// isn't (if set).
+const uint32_t kIsNotInternalizedMask = 1 << 5;
+const uint32_t kNotInternalizedTag = 1 << 5;
+const uint32_t kInternalizedTag = 0;
 
 // A ConsString with an empty string as the right side is a candidate
 // for being shortcut by the garbage collector. We don't allocate any
@@ -131,17 +131,6 @@ enum InstanceType : uint16_t {
   BYTE_ARRAY_TYPE,
   BYTECODE_ARRAY_TYPE,
   FREE_SPACE_TYPE,
-  FIXED_INT8_ARRAY_TYPE,  // FIRST_FIXED_TYPED_ARRAY_TYPE
-  FIXED_UINT8_ARRAY_TYPE,
-  FIXED_INT16_ARRAY_TYPE,
-  FIXED_UINT16_ARRAY_TYPE,
-  FIXED_INT32_ARRAY_TYPE,
-  FIXED_UINT32_ARRAY_TYPE,
-  FIXED_FLOAT32_ARRAY_TYPE,
-  FIXED_FLOAT64_ARRAY_TYPE,
-  FIXED_UINT8_CLAMPED_ARRAY_TYPE,
-  FIXED_BIGINT64_ARRAY_TYPE,
-  FIXED_BIGUINT64_ARRAY_TYPE,  // LAST_FIXED_TYPED_ARRAY_TYPE
   FIXED_DOUBLE_ARRAY_TYPE,
   FEEDBACK_METADATA_TYPE,
   FILLER_TYPE,  // LAST_DATA_TYPE
@@ -156,6 +145,7 @@ enum InstanceType : uint16_t {
   ASYNC_GENERATOR_REQUEST_TYPE,
   CLASS_POSITIONS_TYPE,
   DEBUG_INFO_TYPE,
+  ENUM_CACHE_TYPE,
   FUNCTION_TEMPLATE_INFO_TYPE,
   FUNCTION_TEMPLATE_RARE_DATA_TYPE,
   INTERCEPTOR_INFO_TYPE,
@@ -167,14 +157,18 @@ enum InstanceType : uint16_t {
   PROMISE_REACTION_TYPE,
   PROTOTYPE_INFO_TYPE,
   SCRIPT_TYPE,
+  SOURCE_POSITION_TABLE_WITH_FRAME_CACHE_TYPE,
   STACK_FRAME_INFO_TYPE,
   STACK_TRACE_FRAME_TYPE,
+  TEMPLATE_OBJECT_DESCRIPTION_TYPE,
   TUPLE2_TYPE,
   TUPLE3_TYPE,
   ARRAY_BOILERPLATE_DESCRIPTION_TYPE,
+  WASM_CAPI_FUNCTION_DATA_TYPE,
   WASM_DEBUG_INFO_TYPE,
   WASM_EXCEPTION_TAG_TYPE,
   WASM_EXPORTED_FUNCTION_DATA_TYPE,
+  WASM_JS_FUNCTION_DATA_TYPE,
 
   CALLABLE_TASK_TYPE,  // FIRST_MICROTASK_TYPE
   CALLBACK_TASK_TYPE,
@@ -188,14 +182,15 @@ enum InstanceType : uint16_t {
   // FixedArrays.
   FIXED_ARRAY_TYPE,  // FIRST_FIXED_ARRAY_TYPE
   OBJECT_BOILERPLATE_DESCRIPTION_TYPE,
-  HASH_TABLE_TYPE,        // FIRST_HASH_TABLE_TYPE
-  ORDERED_HASH_MAP_TYPE,  // FIRST_DICTIONARY_TYPE
+  CLOSURE_FEEDBACK_CELL_ARRAY_TYPE,
+  HASH_TABLE_TYPE,  // FIRST_HASH_TABLE_TYPE
+  ORDERED_HASH_MAP_TYPE,
   ORDERED_HASH_SET_TYPE,
   ORDERED_NAME_DICTIONARY_TYPE,
   NAME_DICTIONARY_TYPE,
   GLOBAL_DICTIONARY_TYPE,
   NUMBER_DICTIONARY_TYPE,
-  SIMPLE_NUMBER_DICTIONARY_TYPE,  // LAST_DICTIONARY_TYPE
+  SIMPLE_NUMBER_DICTIONARY_TYPE,
   STRING_TABLE_TYPE,
   EPHEMERON_HASH_TABLE_TYPE,  // LAST_HASH_TABLE_TYPE
   SCOPE_INFO_TYPE,
@@ -328,9 +323,6 @@ enum InstanceType : uint16_t {
   // Boundaries for testing if given HeapObject is a subclass of HashTable
   FIRST_HASH_TABLE_TYPE = HASH_TABLE_TYPE,
   LAST_HASH_TABLE_TYPE = EPHEMERON_HASH_TABLE_TYPE,
-  // Boundaries for testing if given HeapObject is a subclass of Dictionary
-  FIRST_DICTIONARY_TYPE = ORDERED_HASH_MAP_TYPE,
-  LAST_DICTIONARY_TYPE = SIMPLE_NUMBER_DICTIONARY_TYPE,
   // Boundaries for testing if given HeapObject is a subclass of WeakFixedArray.
   FIRST_WEAK_FIXED_ARRAY_TYPE = WEAK_FIXED_ARRAY_TYPE,
   LAST_WEAK_FIXED_ARRAY_TYPE = TRANSITION_ARRAY_TYPE,
@@ -340,9 +332,6 @@ enum InstanceType : uint16_t {
   // Boundaries for testing if given HeapObject is a subclass of Microtask.
   FIRST_MICROTASK_TYPE = CALLABLE_TASK_TYPE,
   LAST_MICROTASK_TYPE = FINALIZATION_GROUP_CLEANUP_JOB_TASK_TYPE,
-  // Boundaries for testing for a fixed typed array.
-  FIRST_FIXED_TYPED_ARRAY_TYPE = FIXED_INT8_ARRAY_TYPE,
-  LAST_FIXED_TYPED_ARRAY_TYPE = FIXED_BIGUINT64_ARRAY_TYPE,
   // Boundary for promotion to old space.
   LAST_DATA_TYPE = FILLER_TYPE,
   // Boundary for objects represented as JSReceiver (i.e. JSObject or JSProxy).
@@ -383,6 +372,10 @@ STATIC_ASSERT(FIRST_NONSTRING_TYPE == Internals::kFirstNonstringType);
 STATIC_ASSERT(ODDBALL_TYPE == Internals::kOddballType);
 STATIC_ASSERT(FOREIGN_TYPE == Internals::kForeignType);
 
+// Make sure it doesn't matter whether we sign-extend or zero-extend these
+// values, because Torque treats InstanceType as signed.
+STATIC_ASSERT(LAST_TYPE < 1 << 15);
+
 V8_EXPORT_PRIVATE std::ostream& operator<<(std::ostream& os,
                                            InstanceType instance_type);
 
@@ -401,6 +394,7 @@ V8_EXPORT_PRIVATE std::ostream& operator<<(std::ostream& os,
   V(CachedTemplateObject, TUPLE3_TYPE)                                       \
   V(CodeDataContainer, CODE_DATA_CONTAINER_TYPE)                             \
   V(CoverageInfo, FIXED_ARRAY_TYPE)                                          \
+  V(ClosureFeedbackCellArray, CLOSURE_FEEDBACK_CELL_ARRAY_TYPE)              \
   V(DescriptorArray, DESCRIPTOR_ARRAY_TYPE)                                  \
   V(EmbedderDataArray, EMBEDDER_DATA_ARRAY_TYPE)                             \
   V(EphemeronHashTable, EPHEMERON_HASH_TABLE_TYPE)                           \
@@ -468,11 +462,9 @@ V8_EXPORT_PRIVATE std::ostream& operator<<(std::ostream& os,
   V(SmallOrderedHashMap, SMALL_ORDERED_HASH_MAP_TYPE)                        \
   V(SmallOrderedHashSet, SMALL_ORDERED_HASH_SET_TYPE)                        \
   V(SmallOrderedNameDictionary, SMALL_ORDERED_NAME_DICTIONARY_TYPE)          \
-  V(SourcePositionTableWithFrameCache, TUPLE2_TYPE)                          \
   V(StoreHandler, STORE_HANDLER_TYPE)                                        \
   V(StringTable, STRING_TABLE_TYPE)                                          \
   V(Symbol, SYMBOL_TYPE)                                                     \
-  V(TemplateObjectDescription, TUPLE2_TYPE)                                  \
   V(TransitionArray, TRANSITION_ARRAY_TYPE)                                  \
   V(UncompiledDataWithoutPreparseData,                                       \
     UNCOMPILED_DATA_WITHOUT_PREPARSE_DATA_TYPE)                              \
@@ -508,10 +500,7 @@ V8_EXPORT_PRIVATE std::ostream& operator<<(std::ostream& os,
 
 #define INSTANCE_TYPE_CHECKERS_RANGE(V)                             \
   V(Context, FIRST_CONTEXT_TYPE, LAST_CONTEXT_TYPE)                 \
-  V(Dictionary, FIRST_DICTIONARY_TYPE, LAST_DICTIONARY_TYPE)        \
   V(FixedArray, FIRST_FIXED_ARRAY_TYPE, LAST_FIXED_ARRAY_TYPE)      \
-  V(FixedTypedArrayBase, FIRST_FIXED_TYPED_ARRAY_TYPE,              \
-    LAST_FIXED_TYPED_ARRAY_TYPE)                                    \
   V(HashTable, FIRST_HASH_TABLE_TYPE, LAST_HASH_TABLE_TYPE)         \
   V(JSMapIterator, FIRST_MAP_ITERATOR_TYPE, LAST_MAP_ITERATOR_TYPE) \
   V(JSSetIterator, FIRST_SET_ITERATOR_TYPE, LAST_SET_ITERATOR_TYPE) \

@@ -6,11 +6,11 @@
 #define V8_OBJECTS_DICTIONARY_H_
 
 #include "src/base/export-template.h"
-#include "src/globals.h"
+#include "src/common/globals.h"
 #include "src/objects/hash-table.h"
 #include "src/objects/property-array.h"
 #include "src/objects/smi.h"
-#include "src/roots.h"
+#include "src/roots/roots.h"
 
 // Has to be the last include (doesn't have include guards):
 #include "src/objects/object-macros.h"
@@ -24,11 +24,12 @@ class Handle;
 class Isolate;
 
 template <typename Derived, typename Shape>
-class Dictionary : public HashTable<Derived, Shape> {
-  typedef HashTable<Derived, Shape> DerivedHashTable;
+class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE) Dictionary
+    : public HashTable<Derived, Shape> {
+  using DerivedHashTable = HashTable<Derived, Shape>;
 
  public:
-  typedef typename Shape::Key Key;
+  using Key = typename Shape::Key;
   // Returns the value at entry.
   Object ValueAt(int entry) {
     return this->get(DerivedHashTable::EntryToIndex(entry) + 1);
@@ -98,16 +99,16 @@ class BaseDictionaryShape : public BaseShape<Key> {
   static inline PropertyDetails DetailsAt(Dictionary dict, int entry) {
     STATIC_ASSERT(Dictionary::kEntrySize == 3);
     DCHECK_GE(entry, 0);  // Not found is -1, which is not caught by get().
-    return PropertyDetails(Smi::cast(dict->get(
-        Dictionary::EntryToIndex(entry) + Dictionary::kEntryDetailsIndex)));
+    return PropertyDetails(Smi::cast(dict.get(Dictionary::EntryToIndex(entry) +
+                                              Dictionary::kEntryDetailsIndex)));
   }
 
   template <typename Dictionary>
   static inline void DetailsAtPut(Isolate* isolate, Dictionary dict, int entry,
                                   PropertyDetails value) {
     STATIC_ASSERT(Dictionary::kEntrySize == 3);
-    dict->set(Dictionary::EntryToIndex(entry) + Dictionary::kEntryDetailsIndex,
-              value.AsSmi());
+    dict.set(Dictionary::EntryToIndex(entry) + Dictionary::kEntryDetailsIndex,
+             value.AsSmi());
   }
 };
 
@@ -125,8 +126,9 @@ class NameDictionaryShape : public BaseDictionaryShape<Handle<Name>> {
 };
 
 template <typename Derived, typename Shape>
-class BaseNameDictionary : public Dictionary<Derived, Shape> {
-  typedef typename Shape::Key Key;
+class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE) BaseNameDictionary
+    : public Dictionary<Derived, Shape> {
+  using Key = typename Shape::Key;
 
  public:
   static const int kNextEnumerationIndexIndex =
@@ -159,7 +161,7 @@ class BaseNameDictionary : public Dictionary<Derived, Shape> {
   // Creates a new dictionary.
   V8_WARN_UNUSED_RESULT static Handle<Derived> New(
       Isolate* isolate, int at_least_space_for,
-      PretenureFlag pretenure = NOT_TENURED,
+      AllocationType allocation = AllocationType::kYoung,
       MinimumCapacity capacity_option = USE_DEFAULT_MINIMUM_CAPACITY);
 
   // Collect the keys into the given KeyAccumulator, in ascending chronological
@@ -192,7 +194,12 @@ class BaseNameDictionary : public Dictionary<Derived, Shape> {
   OBJECT_CONSTRUCTORS(BaseNameDictionary, Dictionary<Derived, Shape>);
 };
 
-class NameDictionary
+class NameDictionary;
+
+extern template class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE)
+    BaseNameDictionary<NameDictionary, NameDictionaryShape>;
+
+class V8_EXPORT_PRIVATE NameDictionary
     : public BaseNameDictionary<NameDictionary, NameDictionaryShape> {
  public:
   DECL_CAST(NameDictionary)
@@ -228,7 +235,12 @@ class GlobalDictionaryShape : public NameDictionaryShape {
   static inline RootIndex GetMapRootIndex();
 };
 
-class GlobalDictionary
+class GlobalDictionary;
+
+extern template class EXPORT_TEMPLATE_DECLARE(V8_EXPORT_PRIVATE)
+    BaseNameDictionary<GlobalDictionary, GlobalDictionaryShape>;
+
+class V8_EXPORT_PRIVATE GlobalDictionary
     : public BaseNameDictionary<GlobalDictionary, GlobalDictionaryShape> {
  public:
   DECL_CAST(GlobalDictionary)
@@ -328,10 +340,6 @@ class NumberDictionary
 
   static const int kMaxNumberKeyIndex = kPrefixStartIndex;
   void UpdateMaxNumberKey(uint32_t key, Handle<JSObject> dictionary_holder);
-
-  // Returns true if the dictionary contains any elements that are non-writable,
-  // non-configurable, non-enumerable, or have getters/setters.
-  bool HasComplexElements();
 
   // Sorting support
   void CopyValuesTo(FixedArray elements);

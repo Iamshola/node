@@ -121,16 +121,16 @@ class ModuleDescriptor : public ZoneObject {
 
   // Custom content-based comparer for the below maps, to keep them stable
   // across parses.
-  struct AstRawStringComparer {
+  struct V8_EXPORT_PRIVATE AstRawStringComparer {
     bool operator()(const AstRawString* lhs, const AstRawString* rhs) const;
   };
 
-  typedef ZoneMap<const AstRawString*, ModuleRequest, AstRawStringComparer>
-      ModuleRequestMap;
-  typedef ZoneMultimap<const AstRawString*, Entry*, AstRawStringComparer>
-      RegularExportMap;
-  typedef ZoneMap<const AstRawString*, Entry*, AstRawStringComparer>
-      RegularImportMap;
+  using ModuleRequestMap =
+      ZoneMap<const AstRawString*, ModuleRequest, AstRawStringComparer>;
+  using RegularExportMap =
+      ZoneMultimap<const AstRawString*, Entry*, AstRawStringComparer>;
+  using RegularImportMap =
+      ZoneMap<const AstRawString*, Entry*, AstRawStringComparer>;
 
   // Module requests.
   const ModuleRequestMap& module_requests() const { return module_requests_; }

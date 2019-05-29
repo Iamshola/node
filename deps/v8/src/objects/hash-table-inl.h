@@ -8,10 +8,10 @@
 #include "src/objects/hash-table.h"
 
 #include "src/heap/heap.h"
-#include "src/objects-inl.h"
 #include "src/objects/fixed-array-inl.h"
 #include "src/objects/heap-object-inl.h"
-#include "src/roots-inl.h"
+#include "src/objects/objects-inl.h"
+#include "src/roots/roots-inl.h"
 
 // Has to be the last include (doesn't have include guards):
 #include "src/objects/object-macros.h"
@@ -48,6 +48,27 @@ ObjectHashSet::ObjectHashSet(Address ptr)
 CAST_ACCESSOR(ObjectHashTable)
 CAST_ACCESSOR(EphemeronHashTable)
 CAST_ACCESSOR(ObjectHashSet)
+
+void EphemeronHashTable::set_key(int index, Object value) {
+  DCHECK_NE(GetReadOnlyRoots().fixed_cow_array_map(), map());
+  DCHECK(IsEphemeronHashTable());
+  DCHECK_GE(index, 0);
+  DCHECK_LT(index, this->length());
+  int offset = kHeaderSize + index * kTaggedSize;
+  RELAXED_WRITE_FIELD(*this, offset, value);
+  EPHEMERON_KEY_WRITE_BARRIER(*this, offset, value);
+}
+
+void EphemeronHashTable::set_key(int index, Object value,
+                                 WriteBarrierMode mode) {
+  DCHECK_NE(GetReadOnlyRoots().fixed_cow_array_map(), map());
+  DCHECK(IsEphemeronHashTable());
+  DCHECK_GE(index, 0);
+  DCHECK_LT(index, this->length());
+  int offset = kHeaderSize + index * kTaggedSize;
+  RELAXED_WRITE_FIELD(*this, offset, value);
+  CONDITIONAL_EPHEMERON_KEY_WRITE_BARRIER(*this, offset, value, mode);
+}
 
 int HashTableBase::NumberOfElements() const {
   return Smi::ToInt(get(kNumberOfElementsIndex));
@@ -143,6 +164,19 @@ bool HashTable<Derived, Shape>::ToKey(ReadOnlyRoots roots, int entry,
   return true;
 }
 
+template <typename Derived, typename Shape>
+void HashTable<Derived, Shape>::set_key(int index, Object value) {
+  DCHECK(!IsEphemeronHashTable());
+  FixedArray::set(index, value);
+}
+
+template <typename Derived, typename Shape>
+void HashTable<Derived, Shape>::set_key(int index, Object value,
+                                        WriteBarrierMode mode) {
+  DCHECK(!IsEphemeronHashTable());
+  FixedArray::set(index, value, mode);
+}
+
 template <typename KeyT>
 bool BaseShape<KeyT>::IsKey(ReadOnlyRoots roots, Object key) {
   return IsLive(roots, key);
@@ -159,7 +193,7 @@ bool ObjectHashSet::Has(Isolate* isolate, Handle<Object> key, int32_t hash) {
 
 bool ObjectHashSet::Has(Isolate* isolate, Handle<Object> key) {
   Object hash = key->GetHash();
-  if (!hash->IsSmi()) return false;
+  if (!hash.IsSmi()) return false;
   return FindEntry(ReadOnlyRoots(isolate), key, Smi::ToInt(hash)) != kNotFound;
 }
 
@@ -173,7 +207,7 @@ uint32_t ObjectHashTableShape::Hash(Isolate* isolate, Handle<Object> key) {
 
 uint32_t ObjectHashTableShape::HashForObject(ReadOnlyRoots roots,
                                              Object other) {
-  return Smi::ToInt(other->GetHash());
+  return Smi::ToInt(other.GetHash());
 }
 
 }  // namespace internal

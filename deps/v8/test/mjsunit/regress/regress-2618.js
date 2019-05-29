@@ -25,13 +25,13 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// Flags: --use-osr --allow-natives-syntax --ignition-osr --opt
+// Flags: --use-osr --allow-natives-syntax --opt
 // Flags: --no-always-opt
 
 // Can't OSR with always-opt or in Lite mode.
 if (isNeverOptimizeLiteMode()) {
   print("Warning: skipping test that requires optimization in Lite mode.");
-  quit(0);
+  testRunner.quit(0);
 }
 assertFalse(isAlwaysOptimize());
 
@@ -50,6 +50,7 @@ function f() {
   } while (false);
 }
 
+%PrepareFunctionForOptimization(f);
 f();
 
 function g() {
@@ -85,4 +86,5 @@ function g() {
   } while (false);
 }
 
+%PrepareFunctionForOptimization(g);
 g();

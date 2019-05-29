@@ -27,15 +27,15 @@
 
 #include <stdlib.h>
 
-#include "src/v8.h"
+#include "src/init/v8.h"
 
-#include "src/code-factory.h"
+#include "src/codegen/code-factory.h"
+#include "src/codegen/macro-assembler.h"
 #include "src/debug/debug.h"
-#include "src/disasm.h"
-#include "src/disassembler.h"
-#include "src/frames-inl.h"
-#include "src/macro-assembler.h"
-#include "src/ostreams.h"
+#include "src/diagnostics/disasm.h"
+#include "src/diagnostics/disassembler.h"
+#include "src/execution/frames-inl.h"
+#include "src/utils/ostreams.h"
 #include "test/cctest/cctest.h"
 
 namespace v8 {
@@ -59,7 +59,8 @@ TEST(DisasmIa320) {
   __ sub(eax, Immediate(12345678));
   __ xor_(eax, 12345678);
   __ and_(eax, 12345678);
-  Handle<FixedArray> foo = isolate->factory()->NewFixedArray(10, TENURED);
+  Handle<FixedArray> foo =
+      isolate->factory()->NewFixedArray(10, AllocationType::kOld);
   __ cmp(eax, foo);
 
   // ---- This one caused crash
@@ -104,7 +105,8 @@ TEST(DisasmIa320) {
   __ cmp(edx, 3);
   __ cmp(edx, Operand(esp, 4));
   __ cmp(Operand(ebp, ecx, times_4, 0), Immediate(1000));
-  Handle<FixedArray> foo2 = isolate->factory()->NewFixedArray(10, TENURED);
+  Handle<FixedArray> foo2 =
+      isolate->factory()->NewFixedArray(10, AllocationType::kOld);
   __ cmp(ebx, foo2);
   __ cmpb(ebx, Operand(ebp, ecx, times_2, 0));
   __ cmpb(Operand(ebp, ecx, times_2, 0), ebx);
@@ -397,6 +399,8 @@ TEST(DisasmIa320) {
     // logic operation
     __ andps(xmm0, xmm1);
     __ andps(xmm0, Operand(ebx, ecx, times_4, 10000));
+    __ andnps(xmm0, xmm1);
+    __ andnps(xmm0, Operand(ebx, ecx, times_4, 10000));
     __ orps(xmm0, xmm1);
     __ orps(xmm0, Operand(ebx, ecx, times_4, 10000));
     __ xorps(xmm0, xmm1);
@@ -617,6 +621,8 @@ TEST(DisasmIa320) {
 
       __ vandps(xmm0, xmm1, xmm2);
       __ vandps(xmm0, xmm1, Operand(ebx, ecx, times_4, 10000));
+      __ vandnps(xmm0, xmm1, xmm2);
+      __ vandnps(xmm0, xmm1, Operand(ebx, ecx, times_4, 10000));
       __ vxorps(xmm0, xmm1, xmm2);
       __ vxorps(xmm0, xmm1, Operand(ebx, ecx, times_4, 10000));
       __ vaddps(xmm0, xmm1, xmm2);
@@ -896,8 +902,7 @@ TEST(DisasmIa320) {
 
   CodeDesc desc;
   assm.GetCode(isolate, &desc);
-  Handle<Code> code =
-      isolate->factory()->NewCode(desc, Code::STUB, Handle<Code>());
+  Handle<Code> code = Factory::CodeBuilder(isolate, desc, Code::STUB).Build();
   USE(code);
 #ifdef OBJECT_PRINT
   StdoutStream os;

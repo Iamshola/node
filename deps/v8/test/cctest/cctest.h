@@ -33,13 +33,13 @@
 #include "include/libplatform/libplatform.h"
 #include "include/v8-platform.h"
 #include "src/base/enum-set.h"
+#include "src/codegen/register-configuration.h"
 #include "src/debug/debug-interface.h"
-#include "src/flags.h"
+#include "src/execution/isolate.h"
+#include "src/flags/flags.h"
 #include "src/heap/factory.h"
-#include "src/isolate.h"
-#include "src/objects.h"
-#include "src/register-configuration.h"
-#include "src/v8.h"
+#include "src/init/v8.h"
+#include "src/objects/objects.h"
 #include "src/zone/accounting-allocator.h"
 
 namespace v8 {
@@ -106,7 +106,7 @@ static constexpr const char* kExtensionName[kMaxExtensions] = {
 
 class CcTest {
  public:
-  typedef void (TestFunction)();
+  using TestFunction = void();
   CcTest(TestFunction* callback, const char* file, const char* name,
          bool enabled, bool initialize);
   ~CcTest() { i::DeleteArray(file_); }
@@ -133,6 +133,7 @@ class CcTest {
   }
 
   static i::Heap* heap();
+  static i::ReadOnlyHeap* read_only_heap();
 
   static void CollectGarbage(i::AllocationSpace space);
   static void CollectAllGarbage(i::Isolate* isolate = nullptr);
@@ -321,9 +322,9 @@ class LocalContext {
 
 
 static inline uint16_t* AsciiToTwoByteString(const char* source) {
-  int array_length = i::StrLength(source) + 1;
+  size_t array_length = strlen(source) + 1;
   uint16_t* converted = i::NewArray<uint16_t>(array_length);
-  for (int i = 0; i < array_length; i++) converted[i] = source[i];
+  for (size_t i = 0; i < array_length; i++) converted[i] = source[i];
   return converted;
 }
 
@@ -337,6 +338,10 @@ static inline i::Handle<T> GetGlobal(const char* name) {
       i::Object::GetProperty(isolate, isolate->global_object(), str_name)
           .ToHandleChecked();
   return i::Handle<T>::cast(value);
+}
+
+static inline v8::Local<v8::Boolean> v8_bool(bool val) {
+  return v8::Boolean::New(v8::Isolate::GetCurrent(), val);
 }
 
 static inline v8::Local<v8::Value> v8_num(double x) {
@@ -386,28 +391,29 @@ static inline int32_t v8_run_int32value(v8::Local<v8::Script> script) {
   return script->Run(context).ToLocalChecked()->Int32Value(context).FromJust();
 }
 
-
 static inline v8::Local<v8::Script> CompileWithOrigin(
-    v8::Local<v8::String> source, v8::Local<v8::String> origin_url) {
-  v8::ScriptOrigin origin(origin_url);
+    v8::Local<v8::String> source, v8::Local<v8::String> origin_url,
+    v8::Local<v8::Boolean> is_shared_cross_origin) {
+  v8::ScriptOrigin origin(origin_url, v8::Local<v8::Integer>(),
+                          v8::Local<v8::Integer>(), is_shared_cross_origin);
   v8::ScriptCompiler::Source script_source(source, origin);
   return v8::ScriptCompiler::Compile(
              v8::Isolate::GetCurrent()->GetCurrentContext(), &script_source)
       .ToLocalChecked();
 }
 
+static inline v8::Local<v8::Script> CompileWithOrigin(
+    v8::Local<v8::String> source, const char* origin_url,
+    bool is_shared_cross_origin) {
+  return CompileWithOrigin(source, v8_str(origin_url),
+                           v8_bool(is_shared_cross_origin));
+}
 
 static inline v8::Local<v8::Script> CompileWithOrigin(
-    v8::Local<v8::String> source, const char* origin_url) {
-  return CompileWithOrigin(source, v8_str(origin_url));
+    const char* source, const char* origin_url, bool is_shared_cross_origin) {
+  return CompileWithOrigin(v8_str(source), v8_str(origin_url),
+                           v8_bool(is_shared_cross_origin));
 }
-
-
-static inline v8::Local<v8::Script> CompileWithOrigin(const char* source,
-                                                      const char* origin_url) {
-  return CompileWithOrigin(v8_str(source), v8_str(origin_url));
-}
-
 
 // Helper functions that compile and run the source.
 static inline v8::MaybeLocal<v8::Value> CompileRun(
@@ -495,11 +501,13 @@ static inline v8::Local<v8::Value> CompileRunWithOrigin(
 
 // Takes a JSFunction and runs it through the test version of the optimizing
 // pipeline, allocating the temporary compilation artifacts in a given Zone.
-// For possible {flags} values, look at OptimizedCompilationInfo::Flag.
-// If passed a non-null pointer for {broker}, outputs the JSHeapBroker to it.
+// For possible {flags} values, look at OptimizedCompilationInfo::Flag.  If
+// {out_broker} is not nullptr, returns the JSHeapBroker via that (transferring
+// ownership to the caller).
 i::Handle<i::JSFunction> Optimize(
     i::Handle<i::JSFunction> function, i::Zone* zone, i::Isolate* isolate,
-    uint32_t flags, i::compiler::JSHeapBroker** out_broker = nullptr);
+    uint32_t flags,
+    std::unique_ptr<i::compiler::JSHeapBroker>* out_broker = nullptr);
 
 static inline void ExpectString(const char* code, const char* expected) {
   v8::Local<v8::Value> result = CompileRun(code);

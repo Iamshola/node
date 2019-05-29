@@ -43,7 +43,17 @@ CONFIGS = dict(
     '--no-lazy',
     '--no-lazy-inner-functions',
   ],
+  ignition_no_ic=[
+    '--turbo-filter=~',
+    '--noopt',
+    '--liftoff',
+    '--no-wasm-tier-up',
+    '--no-use-ic',
+  ],
   ignition_turbo=[],
+  ignition_turbo_no_ic=[
+    '--no-use-ic',
+  ],
   ignition_turbo_opt=[
     '--always-opt',
     '--no-liftoff',
@@ -86,6 +96,7 @@ ADDITIONAL_FLAGS = [
   (0.01, '--thread-pool-size=2'),
   (0.01, '--thread-pool-size=4'),
   (0.01, '--thread-pool-size=8'),
+  (0.1, '--interrupt-budget=1000'),
 ]
 
 # Timeout in seconds for one d8 run.
@@ -103,9 +114,9 @@ PREAMBLE = [
 ARCH_MOCKS = os.path.join(BASE_PATH, 'v8_mock_archs.js')
 SANITY_CHECKS = os.path.join(BASE_PATH, 'v8_sanity_checks.js')
 
-FLAGS = ['--abort_on_stack_or_string_length_overflow', '--expose-gc',
+FLAGS = ['--correctness-fuzzer-suppressions', '--expose-gc',
          '--allow-natives-syntax', '--invoke-weak-callbacks', '--omit-quit',
-         '--es-staging', '--wasm-num-compilation-tasks=0',
+         '--es-staging', '--no-wasm-async-compilation',
          '--suppress-asm-messages']
 
 SUPPORTED_ARCHS = ['ia32', 'x64', 'arm', 'arm64']

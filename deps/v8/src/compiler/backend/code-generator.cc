@@ -4,21 +4,21 @@
 
 #include "src/compiler/backend/code-generator.h"
 
-#include "src/address-map.h"
-#include "src/assembler-inl.h"
 #include "src/base/adapters.h"
+#include "src/codegen/assembler-inl.h"
+#include "src/codegen/macro-assembler-inl.h"
+#include "src/codegen/optimized-compilation-info.h"
+#include "src/codegen/string-constants.h"
 #include "src/compiler/backend/code-generator-impl.h"
 #include "src/compiler/linkage.h"
 #include "src/compiler/pipeline.h"
 #include "src/compiler/wasm-compiler.h"
-#include "src/counters.h"
-#include "src/eh-frame.h"
-#include "src/frames.h"
-#include "src/log.h"
-#include "src/macro-assembler-inl.h"
+#include "src/diagnostics/eh-frame.h"
+#include "src/execution/frames.h"
+#include "src/logging/counters.h"
+#include "src/logging/log.h"
 #include "src/objects/smi.h"
-#include "src/optimized-compilation-info.h"
-#include "src/string-constants.h"
+#include "src/utils/address-map.h"
 
 namespace v8 {
 namespace internal {
@@ -88,6 +88,7 @@ CodeGenerator::CodeGenerator(
   tasm_.set_jump_optimization_info(jump_opt);
   Code::Kind code_kind = info->code_kind();
   if (code_kind == Code::WASM_FUNCTION ||
+      code_kind == Code::WASM_TO_CAPI_FUNCTION ||
       code_kind == Code::WASM_TO_JS_FUNCTION ||
       code_kind == Code::WASM_INTERPRETER_ENTRY ||
       (Builtins::IsBuiltinId(builtin_index) &&
@@ -305,8 +306,7 @@ void CodeGenerator::AssembleCode() {
 
   // Emit the exception handler table.
   if (!handlers_.empty()) {
-    handler_table_offset_ = HandlerTable::EmitReturnTableStart(
-        tasm(), static_cast<int>(handlers_.size()));
+    handler_table_offset_ = HandlerTable::EmitReturnTableStart(tasm());
     for (size_t i = 0; i < handlers_.size(); ++i) {
       HandlerTable::EmitReturnEntry(tasm(), handlers_[i].pc_offset,
                                     handlers_[i].handler->pos());
@@ -344,7 +344,6 @@ void CodeGenerator::TryInsertBranchPoisoning(const InstructionBlock* block) {
     }
     case kFlags_deoptimize_and_poison: {
       UNREACHABLE();
-      break;
     }
     default:
       break;
@@ -396,14 +395,26 @@ MaybeHandle<Code> CodeGenerator::FinalizeCode() {
   // Allocate and install the code.
   CodeDesc desc;
   tasm()->GetCode(isolate(), &desc, safepoints(), handler_table_offset_);
+
+#if defined(V8_OS_WIN_X64)
+  if (Builtins::IsBuiltinId(info_->builtin_index())) {
+    isolate_->SetBuiltinUnwindData(info_->builtin_index(),
+                                   tasm()->GetUnwindInfo());
+  }
+#endif
+
   if (unwinding_info_writer_.eh_frame_writer()) {
     unwinding_info_writer_.eh_frame_writer()->GetEhFrame(&desc);
   }
 
-  MaybeHandle<Code> maybe_code = isolate()->factory()->TryNewCode(
-      desc, info()->code_kind(), Handle<Object>(), info()->builtin_index(),
-      source_positions, deopt_data, kMovable, true,
-      frame()->GetTotalFrameSlotCount());
+  MaybeHandle<Code> maybe_code =
+      Factory::CodeBuilder(isolate(), desc, info()->code_kind())
+          .set_builtin_index(info()->builtin_index())
+          .set_source_position_table(source_positions)
+          .set_deoptimization_data(deopt_data)
+          .set_is_turbofanned()
+          .set_stack_slots(frame()->GetTotalFrameSlotCount())
+          .TryBuild();
 
   Handle<Code> code;
   if (!maybe_code.ToHandle(&code)) {
@@ -429,9 +440,8 @@ bool CodeGenerator::IsNextInAssemblyOrder(RpoNumber block) const {
 }
 
 void CodeGenerator::RecordSafepoint(ReferenceMap* references,
-                                    Safepoint::Kind kind,
                                     Safepoint::DeoptMode deopt_mode) {
-  Safepoint safepoint = safepoints()->DefineSafepoint(tasm(), kind, deopt_mode);
+  Safepoint safepoint = safepoints()->DefineSafepoint(tasm(), deopt_mode);
   int stackSlotToSpillSlotDelta =
       frame()->GetTotalFrameSlotCount() - frame()->GetSpillSlotCount();
   for (const InstructionOperand& operand : references->reference_operands()) {
@@ -445,9 +455,6 @@ void CodeGenerator::RecordSafepoint(ReferenceMap* references,
       // knowledge about those fields anyway.
       if (index < stackSlotToSpillSlotDelta) continue;
       safepoint.DefinePointerSlot(index);
-    } else if (operand.IsRegister() && (kind & Safepoint::kWithRegisters)) {
-      Register reg = LocationOperand::cast(operand).GetRegister();
-      safepoint.DefinePointerRegister(reg);
     }
   }
 }
@@ -754,6 +761,7 @@ bool CodeGenerator::GetSlotAboveSPBeforeTailCall(Instruction* instr,
 StubCallMode CodeGenerator::DetermineStubCallMode() const {
   Code::Kind code_kind = info()->code_kind();
   return (code_kind == Code::WASM_FUNCTION ||
+          code_kind == Code::WASM_TO_CAPI_FUNCTION ||
           code_kind == Code::WASM_TO_JS_FUNCTION)
              ? StubCallMode::kCallWasmRuntimeStub
              : StubCallMode::kCallCodeObject;
@@ -781,7 +789,8 @@ Handle<PodArray<InliningPosition>> CreateInliningPositions(
   }
   Handle<PodArray<InliningPosition>> inl_positions =
       PodArray<InliningPosition>::New(
-          isolate, static_cast<int>(inlined_functions.size()), TENURED);
+          isolate, static_cast<int>(inlined_functions.size()),
+          AllocationType::kOld);
   for (size_t i = 0; i < inlined_functions.size(); ++i) {
     inl_positions->set(static_cast<int>(i), inlined_functions[i].position);
   }
@@ -797,7 +806,7 @@ Handle<DeoptimizationData> CodeGenerator::GenerateDeoptimizationData() {
     return DeoptimizationData::Empty(isolate());
   }
   Handle<DeoptimizationData> data =
-      DeoptimizationData::New(isolate(), deopt_count, TENURED);
+      DeoptimizationData::New(isolate(), deopt_count, AllocationType::kOld);
 
   Handle<ByteArray> translation_array =
       translations_.CreateByteArray(isolate()->factory());
@@ -814,7 +823,7 @@ Handle<DeoptimizationData> CodeGenerator::GenerateDeoptimizationData() {
   }
 
   Handle<FixedArray> literals = isolate()->factory()->NewFixedArray(
-      static_cast<int>(deoptimization_literals_.size()), TENURED);
+      static_cast<int>(deoptimization_literals_.size()), AllocationType::kOld);
   for (unsigned i = 0; i < deoptimization_literals_.size(); i++) {
     Handle<Object> object = deoptimization_literals_[i].Reify(isolate());
     literals->set(i, *object);
@@ -858,9 +867,9 @@ void CodeGenerator::RecordCallPosition(Instruction* instr) {
 
   bool needs_frame_state = (flags & CallDescriptor::kNeedsFrameState);
 
-  RecordSafepoint(
-      instr->reference_map(), Safepoint::kSimple,
-      needs_frame_state ? Safepoint::kLazyDeopt : Safepoint::kNoLazyDeopt);
+  RecordSafepoint(instr->reference_map(), needs_frame_state
+                                              ? Safepoint::kLazyDeopt
+                                              : Safepoint::kNoLazyDeopt);
 
   if (flags & CallDescriptor::kHasExceptionHandler) {
     InstructionOperandConverter i(this, instr);
@@ -1092,7 +1101,12 @@ void CodeGenerator::AddTranslationForOperand(Translation* translation,
     } else if (type == MachineType::Int64()) {
       translation->StoreInt64StackSlot(LocationOperand::cast(op)->index());
     } else {
-      CHECK_EQ(MachineRepresentation::kTagged, type.representation());
+#if defined(V8_COMPRESS_POINTERS)
+      CHECK(MachineRepresentation::kTagged == type.representation() ||
+            MachineRepresentation::kCompressed == type.representation());
+#else
+      CHECK(MachineRepresentation::kTagged == type.representation());
+#endif
       translation->StoreStackSlot(LocationOperand::cast(op)->index());
     }
   } else if (op->IsFPStackSlot()) {
@@ -1115,7 +1129,12 @@ void CodeGenerator::AddTranslationForOperand(Translation* translation,
     } else if (type == MachineType::Int64()) {
       translation->StoreInt64Register(converter.ToRegister(op));
     } else {
-      CHECK_EQ(MachineRepresentation::kTagged, type.representation());
+#if defined(V8_COMPRESS_POINTERS)
+      CHECK(MachineRepresentation::kTagged == type.representation() ||
+            MachineRepresentation::kCompressed == type.representation());
+#else
+      CHECK(MachineRepresentation::kTagged == type.representation());
+#endif
       translation->StoreRegister(converter.ToRegister(op));
     }
   } else if (op->IsFPRegister()) {
@@ -1138,8 +1157,8 @@ void CodeGenerator::AddTranslationForOperand(Translation* translation,
           // Smis.
           DCHECK_EQ(4, kSystemPointerSize);
           Smi smi(static_cast<Address>(constant.ToInt32()));
-          DCHECK(smi->IsSmi());
-          literal = DeoptimizationLiteral(smi->value());
+          DCHECK(smi.IsSmi());
+          literal = DeoptimizationLiteral(smi.value());
         } else if (type.representation() == MachineRepresentation::kBit) {
           if (constant.ToInt32() == 0) {
             literal =
@@ -1173,8 +1192,8 @@ void CodeGenerator::AddTranslationForOperand(Translation* translation,
           // Smis.
           DCHECK_EQ(MachineRepresentation::kTagged, type.representation());
           Smi smi(static_cast<Address>(constant.ToInt64()));
-          DCHECK(smi->IsSmi());
-          literal = DeoptimizationLiteral(smi->value());
+          DCHECK(smi.IsSmi());
+          literal = DeoptimizationLiteral(smi.value());
         }
         break;
       case Constant::kFloat32:

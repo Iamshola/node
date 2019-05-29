@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/api.h"
+#include "src/api/api.h"
 #include "src/builtins/builtins-utils-gen.h"
-#include "src/code-stub-assembler.h"
-#include "src/microtask-queue.h"
+#include "src/codegen/code-stub-assembler.h"
+#include "src/execution/microtask-queue.h"
 #include "src/objects/js-weak-refs.h"
 #include "src/objects/microtask-inl.h"
 #include "src/objects/promise.h"
@@ -409,9 +409,10 @@ void MicrotaskQueueBuiltinsAssembler::EnterMicrotaskContext(
   {
     Node* function =
         ExternalConstant(ExternalReference::call_enter_context_function());
-    CallCFunction2(MachineType::Int32(), MachineType::Pointer(),
-                   MachineType::Pointer(), function, hsi,
-                   BitcastTaggedToWord(native_context));
+    CallCFunction(function, MachineType::Int32(),
+                  std::make_pair(MachineType::Pointer(), hsi),
+                  std::make_pair(MachineType::Pointer(),
+                                 BitcastTaggedToWord(native_context)));
     Goto(&done);
   }
 
@@ -509,9 +510,10 @@ TF_BUILTIN(EnqueueMicrotask, MicrotaskQueueBuiltinsAssembler) {
         ExternalConstant(ExternalReference::isolate_address(isolate()));
     Node* function =
         ExternalConstant(ExternalReference::call_enqueue_microtask_function());
-    CallCFunction3(MachineType::AnyTagged(), MachineType::Pointer(),
-                   MachineType::IntPtr(), MachineType::AnyTagged(), function,
-                   isolate_constant, microtask_queue, microtask);
+    CallCFunction(function, MachineType::AnyTagged(),
+                  std::make_pair(MachineType::Pointer(), isolate_constant),
+                  std::make_pair(MachineType::IntPtr(), microtask_queue),
+                  std::make_pair(MachineType::AnyTagged(), microtask));
     Return(UndefinedConstant());
   }
 

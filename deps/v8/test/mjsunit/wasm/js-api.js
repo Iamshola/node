@@ -641,9 +641,9 @@ assertEq(get.call(tbl1, 0), null);
 assertEq(get.call(tbl1, 0, Infinity), null);
 assertEq(get.call(tbl1, 1), null);
 assertEq(get.call(tbl1, 1.5), null);
-assertThrows(() => get.call(tbl1, 2), RangeError, /Index out of bounds/);
+assertThrows(() => get.call(tbl1, 2), RangeError, /invalid index \d+ into function table/);
 assertThrows(
-    () => get.call(tbl1, 2.5), RangeError, /Index out of bounds/);
+    () => get.call(tbl1, 2.5), RangeError, /invalid index \d+ into function table/);
 assertThrows(() => get.call(tbl1, -1), TypeError, /must be non-negative/);
 assertThrows(
     () => get.call(tbl1, Math.pow(2, 33)), TypeError,
@@ -670,7 +670,7 @@ assertThrows(
     () => set.call(tbl1, undefined), TypeError,
     /must be convertible to a valid number/);
 assertThrows(
-    () => set.call(tbl1, 2, null), RangeError, /index out of bounds/);
+    () => set.call(tbl1, 2, null), RangeError, /invalid index \d+ into function table/);
 assertThrows(
     () => set.call(tbl1, -1, null), TypeError, /must be non-negative/);
 assertThrows(
@@ -734,7 +734,7 @@ assertEq(tbl.length, 1);
 assertEq(tbl.grow(1, 4), 1);
 assertEq(tbl.length, 2);
 assertEq(tbl.length, 2);
-assertThrows(() => tbl.grow(1), Error, /maximum table size exceeded/);
+assertThrows(() => tbl.grow(1), Error, /failed to grow table by \d+/);
 assertThrows(
     () => tbl.grow(Infinity), TypeError, /must be convertible to a valid number/);
 assertThrows(

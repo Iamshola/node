@@ -137,14 +137,14 @@ void SerializerAllocator::OutputStatistics() {
   PrintF("  Spaces (bytes):\n");
 
   for (int space = FIRST_SPACE; space < kNumberOfSpaces; space++) {
-    PrintF("%16s", AllocationSpaceName(static_cast<AllocationSpace>(space)));
+    PrintF("%16s", Heap::GetSpaceName(static_cast<AllocationSpace>(space)));
   }
   PrintF("\n");
 
   for (int space = FIRST_SPACE; space < kNumberOfPreallocatedSpaces; space++) {
     size_t s = pending_chunk_[space];
     for (uint32_t chunk_size : completed_chunks_[space]) s += chunk_size;
-    PrintF("%16" PRIuS, s);
+    PrintF("%16zu", s);
   }
 
   STATIC_ASSERT(MAP_SPACE == kNumberOfPreallocatedSpaces);

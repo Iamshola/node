@@ -180,13 +180,21 @@ class JsonGrammar : public Grammar {
   Symbol file = {Rule({&value})};
 };
 
-JsonValue ParseJson(const std::string& input) {
+JsonParserResult ParseJson(const std::string& input) {
   // Torque needs a CurrentSourceFile scope during parsing.
   // As JSON lives in memory only, a unknown file scope is created.
   SourceFileMap::Scope source_map_scope;
+  TorqueMessages::Scope messages_scope;
   CurrentSourceFile::Scope unkown_file(SourceFileMap::AddSource("<json>"));
 
-  return (*JsonGrammar().Parse(input)).Cast<JsonValue>();
+  JsonParserResult result;
+  try {
+    result.value = (*JsonGrammar().Parse(input)).Cast<JsonValue>();
+  } catch (TorqueAbortCompilation&) {
+    CHECK(!TorqueMessages::Get().empty());
+    result.error = TorqueMessages::Get().front();
+  }
+  return result;
 }
 
 }  // namespace ls

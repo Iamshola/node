@@ -7,27 +7,29 @@
 
 #include <map>
 #include <memory>
+#include <initializer_list>
 
 // Clients of this interface shouldn't depend on lots of compiler internals.
 // Do not include anything from src/compiler here!
-#include "src/allocation.h"
 #include "src/base/macros.h"
+#include "src/base/type-traits.h"
 #include "src/builtins/builtins.h"
-#include "src/code-factory.h"
-#include "src/globals.h"
+#include "src/codegen/code-factory.h"
+#include "src/codegen/machine-type.h"
+#include "src/codegen/source-position.h"
 #include "src/heap/heap.h"
-#include "src/machine-type.h"
-#include "src/objects.h"
 #include "src/objects/arguments.h"
 #include "src/objects/data-handler.h"
 #include "src/objects/heap-number.h"
 #include "src/objects/js-array-buffer.h"
 #include "src/objects/js-collection.h"
+#include "src/objects/js-proxy.h"
 #include "src/objects/map.h"
 #include "src/objects/maybe-object.h"
+#include "src/objects/objects.h"
 #include "src/objects/oddball.h"
 #include "src/runtime/runtime.h"
-#include "src/source-position.h"
+#include "src/utils/allocation.h"
 #include "src/zone/zone-containers.h"
 
 namespace v8 {
@@ -64,14 +66,12 @@ class JSFinalizationGroupCleanupIterator;
 class JSWeakMap;
 class JSWeakRef;
 class JSWeakSet;
-class MaybeObject;
 class PromiseCapability;
 class PromiseFulfillReactionJobTask;
 class PromiseReaction;
 class PromiseReactionJobTask;
 class PromiseRejectReactionJobTask;
 class WasmDebugInfo;
-class WeakCell;
 class Zone;
 
 template <typename T>
@@ -103,6 +103,18 @@ struct Int32T : Word32T {
 };
 struct Uint32T : Word32T {
   static constexpr MachineType kMachineType = MachineType::Uint32();
+};
+struct Int16T : Int32T {
+  static constexpr MachineType kMachineType = MachineType::Int16();
+};
+struct Uint16T : Uint32T {
+  static constexpr MachineType kMachineType = MachineType::Uint16();
+};
+struct Int8T : Int16T {
+  static constexpr MachineType kMachineType = MachineType::Int8();
+};
+struct Uint8T : Uint16T {
+  static constexpr MachineType kMachineType = MachineType::Uint8();
 };
 
 struct Word64T : IntegralT {
@@ -266,9 +278,12 @@ class int31_t {
 #define ENUM_ELEMENT(Name) k##Name,
 #define ENUM_STRUCT_ELEMENT(NAME, Name, name) k##Name,
 enum class ObjectType {
-  kObject,
-  OBJECT_TYPE_LIST(ENUM_ELEMENT) HEAP_OBJECT_TYPE_LIST(ENUM_ELEMENT)
-      STRUCT_LIST(ENUM_STRUCT_ELEMENT)
+  ENUM_ELEMENT(Object)                 //
+  ENUM_ELEMENT(Smi)                    //
+  ENUM_ELEMENT(HeapObject)             //
+  OBJECT_TYPE_LIST(ENUM_ELEMENT)       //
+  HEAP_OBJECT_TYPE_LIST(ENUM_ELEMENT)  //
+  STRUCT_LIST(ENUM_STRUCT_ELEMENT)     //
 };
 #undef ENUM_ELEMENT
 #undef ENUM_STRUCT_ELEMENT
@@ -282,6 +297,8 @@ inline bool NeedsBoundsCheck(CheckBounds check_bounds) {
       return DEBUG_BOOL;
   }
 }
+
+enum class StoreToObjectWriteBarrier { kNone, kMap, kFull };
 
 class AccessCheckNeeded;
 class BigIntWrapper;
@@ -307,10 +324,12 @@ class StringWrapper;
 class SymbolWrapper;
 class Undetectable;
 class UniqueName;
+class WasmCapiFunctionData;
 class WasmExceptionObject;
 class WasmExceptionTag;
 class WasmExportedFunctionData;
 class WasmGlobalObject;
+class WasmJSFunctionData;
 class WasmMemoryObject;
 class WasmModuleObject;
 class WasmTableObject;
@@ -334,6 +353,8 @@ struct ObjectTypeOf {};
     static const ObjectType value = ObjectType::k##Name; \
   };
 OBJECT_TYPE_CASE(Object)
+OBJECT_TYPE_CASE(Smi)
+OBJECT_TYPE_CASE(HeapObject)
 OBJECT_TYPE_LIST(OBJECT_TYPE_CASE)
 HEAP_OBJECT_ORDINARY_TYPE_LIST(OBJECT_TYPE_CASE)
 STRUCT_LIST(OBJECT_TYPE_STRUCT_CASE)
@@ -362,9 +383,9 @@ class RawMachineAssembler;
 class RawMachineLabel;
 class SourcePositionTable;
 
-typedef ZoneVector<CodeAssemblerVariable*> CodeAssemblerVariableList;
+using CodeAssemblerVariableList = ZoneVector<CodeAssemblerVariable*>;
 
-typedef std::function<void()> CodeAssemblerCallback;
+using CodeAssemblerCallback = std::function<void()>;
 
 template <class T, class U>
 struct is_subtype {
@@ -455,12 +476,12 @@ struct types_have_common_values<MaybeObject, T> {
 template <class T>
 class TNode {
  public:
-  static_assert(is_valid_type_tag<T>::value, "invalid type tag");
-
   template <class U,
             typename std::enable_if<is_subtype<U, T>::value, int>::type = 0>
-  TNode(const TNode<U>& other) : node_(other) {}
-  TNode() : node_(nullptr) {}
+  TNode(const TNode<U>& other) : node_(other) {
+    LazyTemplateChecks();
+  }
+  TNode() : TNode(nullptr) {}
 
   TNode operator=(TNode other) {
     DCHECK_NOT_NULL(other.node_);
@@ -473,9 +494,14 @@ class TNode {
   static TNode UncheckedCast(compiler::Node* node) { return TNode(node); }
 
  protected:
-  explicit TNode(compiler::Node* node) : node_(node) {}
+  explicit TNode(compiler::Node* node) : node_(node) { LazyTemplateChecks(); }
 
  private:
+  // These checks shouldn't be checked before TNode is actually used.
+  void LazyTemplateChecks() {
+    static_assert(is_valid_type_tag<T>::value, "invalid type tag");
+  }
+
   compiler::Node* node_;
 };
 
@@ -699,13 +725,14 @@ class V8_EXPORT_PRIVATE CodeAssembler {
         }
         Node* function = code_assembler_->ExternalConstant(
             ExternalReference::check_object_type());
-        code_assembler_->CallCFunction3(
-            MachineType::AnyTagged(), MachineType::AnyTagged(),
-            MachineType::TaggedSigned(), MachineType::AnyTagged(), function,
-            node_,
-            code_assembler_->SmiConstant(
-                static_cast<int>(ObjectTypeOf<A>::value)),
-            code_assembler_->StringConstant(location_));
+        code_assembler_->CallCFunction(
+            function, MachineType::AnyTagged(),
+            std::make_pair(MachineType::AnyTagged(), node_),
+            std::make_pair(MachineType::TaggedSigned(),
+                           code_assembler_->SmiConstant(
+                               static_cast<int>(ObjectTypeOf<A>::value))),
+            std::make_pair(MachineType::AnyTagged(),
+                           code_assembler_->StringConstant(location_)));
       }
 #endif
       return TNode<A>::UncheckedCast(node_);
@@ -778,6 +805,9 @@ class V8_EXPORT_PRIVATE CodeAssembler {
   }
   TNode<UintPtrT> UintPtrConstant(uintptr_t value) {
     return Unsigned(IntPtrConstant(bit_cast<intptr_t>(value)));
+  }
+  TNode<RawPtrT> PointerConstant(void* value) {
+    return ReinterpretCast<RawPtrT>(IntPtrConstant(bit_cast<intptr_t>(value)));
   }
   TNode<Number> NumberConstant(double value);
   TNode<Smi> SmiConstant(Smi value);
@@ -858,6 +888,8 @@ class V8_EXPORT_PRIVATE CodeAssembler {
     Comment(s.str());
   }
 
+  void StaticAssert(TNode<BoolT> value);
+
   void SetSourcePosition(const char* file, int line);
 
   void Bind(Label* label);
@@ -917,17 +949,17 @@ class V8_EXPORT_PRIVATE CodeAssembler {
   TNode<WordT> WordPoisonOnSpeculation(SloppyTNode<WordT> value);
 
   // Load raw memory location.
-  Node* Load(MachineType rep, Node* base,
+  Node* Load(MachineType type, Node* base,
              LoadSensitivity needs_poisoning = LoadSensitivity::kSafe);
   template <class Type>
-  TNode<Type> Load(MachineType rep, TNode<RawPtr<Type>> base) {
+  TNode<Type> Load(MachineType type, TNode<RawPtr<Type>> base) {
     DCHECK(
-        IsSubtype(rep.representation(), MachineRepresentationOf<Type>::value));
-    return UncheckedCast<Type>(Load(rep, static_cast<Node*>(base)));
+        IsSubtype(type.representation(), MachineRepresentationOf<Type>::value));
+    return UncheckedCast<Type>(Load(type, static_cast<Node*>(base)));
   }
-  Node* Load(MachineType rep, Node* base, Node* offset,
+  Node* Load(MachineType type, Node* base, Node* offset,
              LoadSensitivity needs_poisoning = LoadSensitivity::kSafe);
-  Node* AtomicLoad(MachineType rep, Node* base, Node* offset);
+  Node* AtomicLoad(MachineType type, Node* base, Node* offset);
   // Load uncompressed tagged value from (most likely off JS heap) memory
   // location.
   Node* LoadFullTagged(
@@ -936,15 +968,24 @@ class V8_EXPORT_PRIVATE CodeAssembler {
       Node* base, Node* offset,
       LoadSensitivity needs_poisoning = LoadSensitivity::kSafe);
 
+  Node* LoadFromObject(MachineType type, TNode<HeapObject> object,
+                       TNode<IntPtrT> offset);
+
   // Load a value from the root array.
   TNode<Object> LoadRoot(RootIndex root_index);
 
   // Store value to raw memory location.
   Node* Store(Node* base, Node* value);
   Node* Store(Node* base, Node* offset, Node* value);
+  Node* StoreEphemeronKey(Node* base, Node* offset, Node* value);
   Node* StoreNoWriteBarrier(MachineRepresentation rep, Node* base, Node* value);
   Node* StoreNoWriteBarrier(MachineRepresentation rep, Node* base, Node* offset,
                             Node* value);
+  Node* UnsafeStoreNoWriteBarrier(MachineRepresentation rep, Node* base,
+                                  Node* value);
+  Node* UnsafeStoreNoWriteBarrier(MachineRepresentation rep, Node* base,
+                                  Node* offset, Node* value);
+
   // Stores uncompressed tagged value to (most likely off JS heap) memory
   // location without write barrier.
   Node* StoreFullTaggedNoWriteBarrier(Node* base, Node* tagged_value);
@@ -953,10 +994,19 @@ class V8_EXPORT_PRIVATE CodeAssembler {
 
   // Optimized memory operations that map to Turbofan simplified nodes.
   TNode<HeapObject> OptimizedAllocate(TNode<IntPtrT> size,
-                                      PretenureFlag pretenure);
+                                      AllocationType allocation,
+                                      AllowLargeObjects allow_large_objects);
+  void StoreToObject(MachineRepresentation rep, TNode<HeapObject> object,
+                     TNode<IntPtrT> offset, Node* value,
+                     StoreToObjectWriteBarrier write_barrier);
   void OptimizedStoreField(MachineRepresentation rep, TNode<HeapObject> object,
-                           int offset, Node* value,
-                           WriteBarrierKind write_barrier);
+                           int offset, Node* value);
+  void OptimizedStoreFieldAssertNoWriteBarrier(MachineRepresentation rep,
+                                               TNode<HeapObject> object,
+                                               int offset, Node* value);
+  void OptimizedStoreFieldUnsafeNoWriteBarrier(MachineRepresentation rep,
+                                               TNode<HeapObject> object,
+                                               int offset, Node* value);
   void OptimizedStoreMap(TNode<HeapObject> object, TNode<Map>);
   // {value_high} is used for 64-bit stores on 32-bit platforms, must be
   // nullptr in other cases.
@@ -1167,6 +1217,10 @@ class V8_EXPORT_PRIVATE CodeAssembler {
   // Projections
   Node* Projection(int index, Node* value);
 
+  // Pointer compression and decompression.
+  Node* ChangeTaggedToCompressed(Node* tagged);
+  Node* ChangeCompressedToTagged(Node* compressed);
+
   template <int index, class T1, class T2>
   TNode<typename std::tuple_element<index, std::tuple<T1, T2>>::type>
   Projection(TNode<PairT<T1, T2>> value) {
@@ -1325,64 +1379,30 @@ class V8_EXPORT_PRIVATE CodeAssembler {
   Node* CallCFunctionN(Signature<MachineType>* signature, int input_count,
                        Node* const* inputs);
 
-  // Call to a C function with one argument.
-  Node* CallCFunction1(MachineType return_type, MachineType arg0_type,
-                       Node* function, Node* arg0);
+  // Type representing C function argument with type info.
+  using CFunctionArg = std::pair<MachineType, Node*>;
 
-  // Call to a C function with one argument, while saving/restoring caller
-  // registers except the register used for return value.
-  Node* CallCFunction1WithCallerSavedRegisters(MachineType return_type,
-                                               MachineType arg0_type,
-                                               Node* function, Node* arg0,
-                                               SaveFPRegsMode mode);
+  // Call to a C function.
+  template <class... CArgs>
+  Node* CallCFunction(Node* function, MachineType return_type, CArgs... cargs) {
+    static_assert(v8::internal::conjunction<
+                      std::is_convertible<CArgs, CFunctionArg>...>::value,
+                  "invalid argument types");
+    return CallCFunction(function, return_type, {cargs...});
+  }
 
-  // Call to a C function with two arguments.
-  Node* CallCFunction2(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, Node* function, Node* arg0,
-                       Node* arg1);
-
-  // Call to a C function with three arguments.
-  Node* CallCFunction3(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, MachineType arg2_type,
-                       Node* function, Node* arg0, Node* arg1, Node* arg2);
-
-  // Call to a C function with three arguments, while saving/restoring caller
-  // registers except the register used for return value.
-  Node* CallCFunction3WithCallerSavedRegisters(
-      MachineType return_type, MachineType arg0_type, MachineType arg1_type,
-      MachineType arg2_type, Node* function, Node* arg0, Node* arg1, Node* arg2,
-      SaveFPRegsMode mode);
-
-  // Call to a C function with four arguments.
-  Node* CallCFunction4(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, MachineType arg2_type,
-                       MachineType arg3_type, Node* function, Node* arg0,
-                       Node* arg1, Node* arg2, Node* arg3);
-
-  // Call to a C function with five arguments.
-  Node* CallCFunction5(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, MachineType arg2_type,
-                       MachineType arg3_type, MachineType arg4_type,
-                       Node* function, Node* arg0, Node* arg1, Node* arg2,
-                       Node* arg3, Node* arg4);
-
-  // Call to a C function with six arguments.
-  Node* CallCFunction6(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, MachineType arg2_type,
-                       MachineType arg3_type, MachineType arg4_type,
-                       MachineType arg5_type, Node* function, Node* arg0,
-                       Node* arg1, Node* arg2, Node* arg3, Node* arg4,
-                       Node* arg5);
-
-  // Call to a C function with nine arguments.
-  Node* CallCFunction9(MachineType return_type, MachineType arg0_type,
-                       MachineType arg1_type, MachineType arg2_type,
-                       MachineType arg3_type, MachineType arg4_type,
-                       MachineType arg5_type, MachineType arg6_type,
-                       MachineType arg7_type, MachineType arg8_type,
-                       Node* function, Node* arg0, Node* arg1, Node* arg2,
-                       Node* arg3, Node* arg4, Node* arg5, Node* arg6,
-                       Node* arg7, Node* arg8);
+  // Call to a C function, while saving/restoring caller registers.
+  template <class... CArgs>
+  Node* CallCFunctionWithCallerSavedRegisters(Node* function,
+                                              MachineType return_type,
+                                              SaveFPRegsMode mode,
+                                              CArgs... cargs) {
+    static_assert(v8::internal::conjunction<
+                      std::is_convertible<CArgs, CFunctionArg>...>::value,
+                  "invalid argument types");
+    return CallCFunctionWithCallerSavedRegisters(function, return_type, mode,
+                                                 {cargs...});
+  }
 
   // Exception handling support.
   void GotoIfException(Node* node, Label* if_exception,
@@ -1415,6 +1435,13 @@ class V8_EXPORT_PRIVATE CodeAssembler {
 
  private:
   void HandleException(Node* result);
+
+  Node* CallCFunction(Node* function, MachineType return_type,
+                      std::initializer_list<CFunctionArg> args);
+
+  Node* CallCFunctionWithCallerSavedRegisters(
+      Node* function, MachineType return_type, SaveFPRegsMode mode,
+      std::initializer_list<CFunctionArg> args);
 
   TNode<Object> CallRuntimeImpl(Runtime::FunctionId function,
                                 TNode<Object> context,
@@ -1463,7 +1490,7 @@ class V8_EXPORT_PRIVATE CodeAssembler {
   DISALLOW_COPY_AND_ASSIGN(CodeAssembler);
 };
 
-class CodeAssemblerVariable {
+class V8_EXPORT_PRIVATE CodeAssemblerVariable {
  public:
   explicit CodeAssemblerVariable(CodeAssembler* assembler,
                                  MachineRepresentation rep);
@@ -1533,7 +1560,7 @@ class TypedCodeAssemblerVariable : public CodeAssemblerVariable {
   using CodeAssemblerVariable::Bind;
 };
 
-class CodeAssemblerLabel {
+class V8_EXPORT_PRIVATE CodeAssemblerLabel {
  public:
   enum Type { kDeferred, kNonDeferred };
 
@@ -1649,8 +1676,8 @@ class CodeAssemblerParameterizedLabel
   }
 };
 
-typedef CodeAssemblerParameterizedLabel<Object>
-    CodeAssemblerExceptionHandlerLabel;
+using CodeAssemblerExceptionHandlerLabel =
+    CodeAssemblerParameterizedLabel<Object>;
 
 class V8_EXPORT_PRIVATE CodeAssemblerState {
  public:
@@ -1705,7 +1732,7 @@ class V8_EXPORT_PRIVATE CodeAssemblerState {
   CodeAssemblerCallback call_prologue_;
   CodeAssemblerCallback call_epilogue_;
   std::vector<CodeAssemblerExceptionHandlerLabel*> exception_handler_labels_;
-  typedef uint32_t VariableId;
+  using VariableId = uint32_t;
   VariableId next_variable_id_ = 0;
 
   VariableId NextVariableId() { return next_variable_id_++; }
@@ -1713,7 +1740,7 @@ class V8_EXPORT_PRIVATE CodeAssemblerState {
   DISALLOW_COPY_AND_ASSIGN(CodeAssemblerState);
 };
 
-class CodeAssemblerScopedExceptionHandler {
+class V8_EXPORT_PRIVATE CodeAssemblerScopedExceptionHandler {
  public:
   CodeAssemblerScopedExceptionHandler(
       CodeAssembler* assembler, CodeAssemblerExceptionHandlerLabel* label);
@@ -1737,9 +1764,9 @@ class CodeAssemblerScopedExceptionHandler {
 }  // namespace compiler
 
 #if defined(V8_HOST_ARCH_32_BIT)
-typedef Smi BInt;
+using BInt = Smi;
 #elif defined(V8_HOST_ARCH_64_BIT)
-typedef IntPtrT BInt;
+using BInt = IntPtrT;
 #else
 #error Unknown architecture.
 #endif

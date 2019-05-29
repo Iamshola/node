@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#include "src/api-inl.h"
+#include "src/api/api-inl.h"
 #include "test/cctest/wasm/wasm-atomics-utils.h"
 #include "test/common/wasm/test-signatures.h"
 #include "test/common/wasm/wasm-macro-gen.h"
@@ -71,7 +71,7 @@ WASM_EXEC_TEST(TryCatchCallIndirect) {
   // Build a throwing helper function.
   WasmFunctionCompiler& throw_func = r.NewFunction(sigs.i_ii());
   BUILD(throw_func, WASM_THROW(except));
-  r.builder().AddSignature(sigs.i_ii());
+  byte sig_index = r.builder().AddSignature(sigs.i_ii());
   throw_func.SetSigIndex(0);
 
   // Add an indirect function table.
@@ -79,7 +79,6 @@ WASM_EXEC_TEST(TryCatchCallIndirect) {
       static_cast<uint16_t>(throw_func.function_index())};
   r.builder().AddIndirectFunctionTable(indirect_function_table,
                                        arraysize(indirect_function_table));
-  r.builder().PopulateIndirectFunctionTable();
 
   // Build the main test function.
   BUILD(r, WASM_TRY_CATCH_T(
@@ -87,7 +86,7 @@ WASM_EXEC_TEST(TryCatchCallIndirect) {
                WASM_STMTS(WASM_I32V(kResult1),
                           WASM_IF(WASM_I32_EQZ(WASM_GET_LOCAL(0)),
                                   WASM_STMTS(WASM_CALL_INDIRECT2(
-                                                 0, WASM_GET_LOCAL(0),
+                                                 sig_index, WASM_GET_LOCAL(0),
                                                  WASM_I32V(7), WASM_I32V(9)),
                                              WASM_DROP))),
                WASM_STMTS(WASM_DROP, WASM_I32V(kResult0))));

@@ -34,7 +34,7 @@ class Object;
 #endif
 
 // A Deserializer reads a snapshot and reconstructs the Object graph it defines.
-class Deserializer : public SerializerDeserializer {
+class V8_EXPORT_PRIVATE Deserializer : public SerializerDeserializer {
  public:
   ~Deserializer() override;
 
@@ -47,7 +47,6 @@ class Deserializer : public SerializerDeserializer {
       : isolate_(nullptr),
         source_(data->Payload()),
         magic_number_(data->GetMagicNumber()),
-        external_reference_table_(nullptr),
         deserializing_user_code_(deserializing_user_code),
         can_rehash_(false) {
     allocator()->DecodeReservation(data->Reservations());
@@ -160,8 +159,6 @@ class Deserializer : public SerializerDeserializer {
   SnapshotByteSource source_;
   uint32_t magic_number_;
 
-  ExternalReferenceTable* external_reference_table_;
-
   std::vector<Map> new_maps_;
   std::vector<AllocationSite> new_allocation_sites_;
   std::vector<Code> new_code_objects_;
@@ -189,13 +186,15 @@ class Deserializer : public SerializerDeserializer {
 };
 
 // Used to insert a deserialized internalized string into the string table.
-class StringTableInsertionKey : public StringTableKey {
+class StringTableInsertionKey final : public StringTableKey {
  public:
   explicit StringTableInsertionKey(String string);
 
-  bool IsMatch(Object string) override;
+  bool IsMatch(String string) override;
 
   V8_WARN_UNUSED_RESULT Handle<String> AsHandle(Isolate* isolate) override;
+
+  String string() const { return string_; }
 
  private:
   uint32_t ComputeHashField(String string);

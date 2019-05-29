@@ -11,7 +11,7 @@
 
 #include "include/v8.h"
 #include "src/heap/factory.h"
-#include "src/objects-inl.h"
+#include "src/objects/objects-inl.h"
 #include "src/regexp/jsregexp.h"
 #include "test/fuzzer/fuzzer-support.h"
 
@@ -316,7 +316,13 @@ std::string GenerateSourceString(FuzzerArgs* args, const std::string& test) {
      << "const slow = test();\n"
      << "%SetForceSlowPath(false);\n";
   // clang-format on
-  return ss.str();
+
+  std::string source = ss.str();
+  if (kVerbose) {
+    fprintf(stderr, "Generated source:\n```\n%s\n```\n", source.c_str());
+  }
+
+  return source;
 }
 
 void PrintExceptionMessage(v8::Isolate* isolate, v8::TryCatch* try_catch) {
@@ -368,8 +374,7 @@ void CompileRunAndVerify(FuzzerArgs* args, const std::string& source) {
     uint32_t hash = StringHasher::HashSequentialString(
         args->input_data, static_cast<int>(args->input_length),
         kRegExpBuiltinsFuzzerHashSeed);
-    V8_Fatal(__FILE__, __LINE__,
-             "!ResultAreIdentical(args); RegExpBuiltinsFuzzerHash=%x", hash);
+    FATAL("!ResultAreIdentical(args); RegExpBuiltinsFuzzerHash=%x", hash);
   }
 }
 

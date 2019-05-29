@@ -6,15 +6,15 @@
 
 #include <limits>
 
-#include "src/assembler-inl.h"
 #include "src/base/adapters.h"
+#include "src/codegen/assembler-inl.h"
 #include "src/compiler/backend/instruction-selector-impl.h"
 #include "src/compiler/compiler-source-position-table.h"
 #include "src/compiler/node-matchers.h"
 #include "src/compiler/pipeline.h"
 #include "src/compiler/schedule.h"
 #include "src/compiler/state-values-utils.h"
-#include "src/deoptimizer.h"
+#include "src/deoptimizer/deoptimizer.h"
 
 namespace v8 {
 namespace internal {
@@ -458,7 +458,7 @@ InstructionOperand OperandForDeopt(Isolate* isolate, OperandGenerator* g,
     case IrOpcode::kDelayedStringConstant:
       return g->UseImmediate(input);
     case IrOpcode::kHeapConstant: {
-      if (!CanBeTaggedPointer(rep)) {
+      if (!CanBeTaggedOrCompressedPointer(rep)) {
         // If we have inconsistent static and dynamic types, e.g. if we
         // smi-check a string, we can get here with a heap object that
         // says it is a smi. In that case, we return an invalid instruction
@@ -485,7 +485,6 @@ InstructionOperand OperandForDeopt(Isolate* isolate, OperandGenerator* g,
     case IrOpcode::kObjectState:
     case IrOpcode::kTypedObjectState:
       UNREACHABLE();
-      break;
     default:
       switch (kind) {
         case FrameStateInputKind::kStackSlot:
@@ -1007,8 +1006,13 @@ void InstructionSelector::InitializeCallBuffer(Node* call, CallBuffer* buffer,
     UnallocatedOperand unallocated = UnallocatedOperand::cast(op);
     if (unallocated.HasFixedSlotPolicy() && !call_tail) {
       int stack_index = -unallocated.fixed_slot_index() - 1;
+      // This can insert empty slots before stack_index and will insert enough
+      // slots after stack_index to store the parameter.
       if (static_cast<size_t>(stack_index) >= buffer->pushed_nodes.size()) {
-        buffer->pushed_nodes.resize(stack_index + 1);
+        int num_slots = std::max(
+            1, (ElementSizeInBytes(location.GetType().representation()) /
+                kSystemPointerSize));
+        buffer->pushed_nodes.resize(stack_index + num_slots);
       }
       PushParameter param = {*iter, location};
       buffer->pushed_nodes[stack_index] = param;
@@ -1227,7 +1231,6 @@ void InstructionSelector::VisitControl(BasicBlock* block) {
     }
     default:
       UNREACHABLE();
-      break;
   }
   if (trace_turbo_ == kEnableTraceTurboJson && input) {
     int instruction_start = static_cast<int>(instructions_.size());
@@ -1328,6 +1331,9 @@ void InstructionSelector::VisitNode(Node* node) {
       return;
     case IrOpcode::kUnreachable:
       VisitUnreachable(node);
+      return;
+    case IrOpcode::kStaticAssert:
+      VisitStaticAssert(node);
       return;
     case IrOpcode::kDeadValue:
       VisitDeadValue(node);
@@ -1517,6 +1523,25 @@ void InstructionSelector::VisitNode(Node* node) {
       return MarkAsWord64(node), VisitChangeInt32ToInt64(node);
     case IrOpcode::kChangeUint32ToUint64:
       return MarkAsWord64(node), VisitChangeUint32ToUint64(node);
+// TODO(mips-team): Support compress pointers.
+#ifdef V8_COMPRESS_POINTERS
+    case IrOpcode::kChangeTaggedToCompressed:
+      return MarkAsCompressed(node), VisitChangeTaggedToCompressed(node);
+    case IrOpcode::kChangeTaggedPointerToCompressedPointer:
+      return MarkAsCompressed(node),
+             VisitChangeTaggedPointerToCompressedPointer(node);
+    case IrOpcode::kChangeTaggedSignedToCompressedSigned:
+      return MarkAsWord32(node),
+             VisitChangeTaggedSignedToCompressedSigned(node);
+    case IrOpcode::kChangeCompressedToTagged:
+      return MarkAsReference(node), VisitChangeCompressedToTagged(node);
+    case IrOpcode::kChangeCompressedPointerToTaggedPointer:
+      return MarkAsReference(node),
+             VisitChangeCompressedPointerToTaggedPointer(node);
+    case IrOpcode::kChangeCompressedSignedToTaggedSigned:
+      return MarkAsWord64(node),
+             VisitChangeCompressedSignedToTaggedSigned(node);
+#endif
     case IrOpcode::kTruncateFloat64ToFloat32:
       return MarkAsFloat32(node), VisitTruncateFloat64ToFloat32(node);
     case IrOpcode::kTruncateFloat64ToWord32:
@@ -1764,8 +1789,6 @@ void InstructionSelector::VisitNode(Node* node) {
       ATOMIC_CASE(Exchange)
       ATOMIC_CASE(CompareExchange)
 #undef ATOMIC_CASE
-    case IrOpcode::kSpeculationFence:
-      return VisitSpeculationFence(node);
     case IrOpcode::kProtectedLoad: {
       LoadRepresentation type = LoadRepresentationOf(node->op());
       MarkAsRepresentation(type.representation(), node);
@@ -1989,7 +2012,7 @@ void InstructionSelector::VisitNode(Node* node) {
     case IrOpcode::kI8x16GtU:
       return MarkAsSimd128(node), VisitI8x16GtU(node);
     case IrOpcode::kI8x16GeU:
-      return MarkAsSimd128(node), VisitI16x8GeU(node);
+      return MarkAsSimd128(node), VisitI8x16GeU(node);
     case IrOpcode::kS128Zero:
       return MarkAsSimd128(node), VisitS128Zero(node);
     case IrOpcode::kS128And:
@@ -2283,6 +2306,37 @@ void InstructionSelector::VisitChangeInt64ToFloat64(Node* node) {
 void InstructionSelector::VisitChangeUint32ToUint64(Node* node) {
   UNIMPLEMENTED();
 }
+
+// TODO(mips-team): Support compress pointers.
+#ifdef V8_COMPRESS_POINTERS
+void InstructionSelector::VisitChangeTaggedToCompressed(Node* node) {
+  UNIMPLEMENTED();
+}
+
+void InstructionSelector::VisitChangeTaggedPointerToCompressedPointer(
+    Node* node) {
+  UNIMPLEMENTED();
+}
+
+void InstructionSelector::VisitChangeTaggedSignedToCompressedSigned(
+    Node* node) {
+  UNIMPLEMENTED();
+}
+
+void InstructionSelector::VisitChangeCompressedToTagged(Node* node) {
+  UNIMPLEMENTED();
+}
+
+void InstructionSelector::VisitChangeCompressedPointerToTaggedPointer(
+    Node* node) {
+  UNIMPLEMENTED();
+}
+
+void InstructionSelector::VisitChangeCompressedSignedToTaggedSigned(
+    Node* node) {
+  UNIMPLEMENTED();
+}
+#endif
 
 void InstructionSelector::VisitChangeFloat64ToInt64(Node* node) {
   UNIMPLEMENTED();
@@ -2789,6 +2843,11 @@ void InstructionSelector::VisitDebugBreak(Node* node) {
 void InstructionSelector::VisitUnreachable(Node* node) {
   OperandGenerator g(this);
   Emit(kArchDebugBreak, g.NoOutput());
+}
+
+void InstructionSelector::VisitStaticAssert(Node* node) {
+  node->InputAt(0)->Print();
+  FATAL("Expected turbofan static assert to hold, but got non-true input!\n");
 }
 
 void InstructionSelector::VisitDeadValue(Node* node) {

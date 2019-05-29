@@ -12,10 +12,10 @@
 #include <set>
 #include <string>
 
+#include "src/execution/isolate.h"
 #include "src/heap/factory.h"
-#include "src/isolate.h"
-#include "src/objects.h"
 #include "src/objects/managed.h"
+#include "src/objects/objects.h"
 #include "unicode/uversion.h"
 
 // Has to be the last include (doesn't have include guards):
@@ -44,13 +44,16 @@ class JSRelativeTimeFormat : public JSObject {
   Handle<String> NumericAsString() const;
 
   // ecma402/#sec-Intl.RelativeTimeFormat.prototype.format
-  // ecma402/#sec-Intl.RelativeTimeFormat.prototype.formatToParts
-  V8_WARN_UNUSED_RESULT static MaybeHandle<Object> Format(
+  V8_WARN_UNUSED_RESULT static MaybeHandle<String> Format(
       Isolate* isolate, Handle<Object> value_obj, Handle<Object> unit_obj,
-      Handle<JSRelativeTimeFormat> format_holder, const char* func_name,
-      bool to_parts);
+      Handle<JSRelativeTimeFormat> format);
 
-  static const std::set<std::string>& GetAvailableLocales();
+  // ecma402/#sec-Intl.RelativeTimeFormat.prototype.formatToParts
+  V8_WARN_UNUSED_RESULT static MaybeHandle<JSArray> FormatToParts(
+      Isolate* isolate, Handle<Object> value_obj, Handle<Object> unit_obj,
+      Handle<JSRelativeTimeFormat> format);
+
+  V8_EXPORT_PRIVATE static const std::set<std::string>& GetAvailableLocales();
 
   DECL_CAST(JSRelativeTimeFormat)
 
@@ -106,17 +109,8 @@ class JSRelativeTimeFormat : public JSObject {
   DECL_VERIFIER(JSRelativeTimeFormat)
 
   // Layout description.
-#define JS_RELATIVE_TIME_FORMAT_FIELDS(V)     \
-  V(kJSRelativeTimeFormatOffset, kTaggedSize) \
-  V(kLocaleOffset, kTaggedSize)               \
-  V(kICUFormatterOffset, kTaggedSize)         \
-  V(kFlagsOffset, kTaggedSize)                \
-  /* Header size. */                          \
-  V(kSize, 0)
-
   DEFINE_FIELD_OFFSET_CONSTANTS(JSObject::kHeaderSize,
-                                JS_RELATIVE_TIME_FORMAT_FIELDS)
-#undef JS_RELATIVE_TIME_FORMAT_FIELDS
+                                TORQUE_GENERATED_JSRELATIVE_TIME_FORMAT_FIELDS)
 
  private:
   static Style getStyle(const char* str);

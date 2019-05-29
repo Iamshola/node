@@ -25,10 +25,10 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "src/api-inl.h"
-#include "src/isolate.h"
-#include "src/objects-inl.h"
-#include "src/v8.h"
+#include "src/api/api-inl.h"
+#include "src/execution/isolate.h"
+#include "src/init/v8.h"
+#include "src/objects/objects-inl.h"
 #include "test/cctest/cctest.h"
 
 #include "src/base/platform/platform.h"
@@ -866,26 +866,23 @@ class TerminatorSleeperThread : public v8::base::Thread {
 };
 
 TEST(TerminateRegExp) {
-  // The regexp interpreter does not support preemption.
-  if (!i::FLAG_regexp_interpret_all) {
-    i::FLAG_allow_natives_syntax = true;
-    v8::Isolate* isolate = CcTest::isolate();
-    v8::HandleScope scope(isolate);
-    v8::Local<v8::ObjectTemplate> global = CreateGlobalTemplate(
-        isolate, TerminateCurrentThread, DoLoopCancelTerminate);
-    v8::Local<v8::Context> context = v8::Context::New(isolate, nullptr, global);
-    v8::Context::Scope context_scope(context);
-    CHECK(!isolate->IsExecutionTerminating());
-    v8::TryCatch try_catch(isolate);
-    CHECK(!isolate->IsExecutionTerminating());
-    CHECK(!CompileRun("var re = /(x+)+y$/; re.test('x');").IsEmpty());
-    TerminatorSleeperThread terminator(isolate, 100);
-    terminator.Start();
-    CHECK(CompileRun("re.test('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); fail();")
-              .IsEmpty());
-    CHECK(try_catch.HasCaught());
-    CHECK(isolate->IsExecutionTerminating());
-  }
+  i::FLAG_allow_natives_syntax = true;
+  v8::Isolate* isolate = CcTest::isolate();
+  v8::HandleScope scope(isolate);
+  v8::Local<v8::ObjectTemplate> global = CreateGlobalTemplate(
+      isolate, TerminateCurrentThread, DoLoopCancelTerminate);
+  v8::Local<v8::Context> context = v8::Context::New(isolate, nullptr, global);
+  v8::Context::Scope context_scope(context);
+  CHECK(!isolate->IsExecutionTerminating());
+  v8::TryCatch try_catch(isolate);
+  CHECK(!isolate->IsExecutionTerminating());
+  CHECK(!CompileRun("var re = /(x+)+y$/; re.test('x');").IsEmpty());
+  TerminatorSleeperThread terminator(isolate, 100);
+  terminator.Start();
+  CHECK(CompileRun("re.test('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); fail();")
+            .IsEmpty());
+  CHECK(try_catch.HasCaught());
+  CHECK(isolate->IsExecutionTerminating());
 }
 
 TEST(TerminateInMicrotask) {

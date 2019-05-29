@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "include/v8.h"
-#include "src/globals.h"
+#include "src/common/globals.h"
 
 namespace v8 {
 
@@ -194,7 +194,7 @@ class ConsoleDelegate {
   virtual ~ConsoleDelegate() = default;
 };
 
-typedef int BreakpointId;
+using BreakpointId = int;
 
 }  // namespace debug
 }  // namespace v8

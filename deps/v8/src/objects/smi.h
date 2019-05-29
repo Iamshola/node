@@ -5,7 +5,7 @@
 #ifndef V8_OBJECTS_SMI_H_
 #define V8_OBJECTS_SMI_H_
 
-#include "src/globals.h"
+#include "src/common/globals.h"
 #include "src/objects/heap-object.h"
 
 // Has to be the last include (doesn't have include guards):
@@ -41,7 +41,9 @@ class Smi : public Object {
   }
 
   // Convert a Smi object to an int.
-  static inline int ToInt(const Object object);
+  static inline int ToInt(const Object object) {
+    return Smi::cast(object).value();
+  }
 
   // Convert a value to a Smi object.
   static inline constexpr Smi FromInt(int value) {
@@ -87,7 +89,8 @@ class Smi : public Object {
   //  1 if x > y.
   // Returns the result (a tagged Smi) as a raw Address for ExternalReference
   // usage.
-  static Address LexicographicCompare(Isolate* isolate, Smi x, Smi y);
+  V8_EXPORT_PRIVATE static Address LexicographicCompare(Isolate* isolate, Smi x,
+                                                        Smi y);
 
   DECL_CAST(Smi)
 
@@ -105,6 +108,8 @@ class Smi : public Object {
   static constexpr int kMinValue = kSmiMinValue;
   static constexpr int kMaxValue = kSmiMaxValue;
 };
+
+CAST_ACCESSOR(Smi)
 
 }  // namespace internal
 }  // namespace v8

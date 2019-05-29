@@ -5,10 +5,11 @@
 #ifndef V8_DEBUG_DEBUG_FRAMES_H_
 #define V8_DEBUG_DEBUG_FRAMES_H_
 
-#include "src/deoptimizer.h"
-#include "src/frames.h"
-#include "src/isolate.h"
-#include "src/objects.h"
+#include "src/deoptimizer/deoptimizer.h"
+#include "src/execution/frames.h"
+#include "src/execution/isolate.h"
+#include "src/execution/v8threads.h"
+#include "src/objects/objects.h"
 #include "src/wasm/wasm-interpreter.h"
 
 namespace v8 {
@@ -64,6 +65,24 @@ class FrameInspector {
 
   DISALLOW_COPY_AND_ASSIGN(FrameInspector);
 };
+
+class RedirectActiveFunctions : public ThreadVisitor {
+ public:
+  enum class Mode {
+    kUseOriginalBytecode,
+    kUseDebugBytecode,
+  };
+
+  explicit RedirectActiveFunctions(SharedFunctionInfo shared, Mode mode);
+
+  void VisitThread(Isolate* isolate, ThreadLocalTop* top) override;
+
+ private:
+  SharedFunctionInfo shared_;
+  Mode mode_;
+  DisallowHeapAllocation no_gc_;
+};
+
 }  // namespace internal
 }  // namespace v8
 

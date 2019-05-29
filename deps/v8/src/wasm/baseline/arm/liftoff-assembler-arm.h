@@ -139,6 +139,28 @@ inline void I64Binop(LiftoffAssembler* assm, LiftoffRegister dst,
   }
 }
 
+template <void (Assembler::*op)(Register, Register, const Operand&, SBit,
+                                Condition),
+          void (Assembler::*op_with_carry)(Register, Register, const Operand&,
+                                           SBit, Condition)>
+inline void I64BinopI(LiftoffAssembler* assm, LiftoffRegister dst,
+                      LiftoffRegister lhs, int32_t imm) {
+  UseScratchRegisterScope temps(assm);
+  Register scratch = dst.low_gp();
+  bool can_use_dst = dst.low_gp() != lhs.high_gp();
+  if (!can_use_dst) {
+    scratch = temps.Acquire();
+  }
+  (assm->*op)(scratch, lhs.low_gp(), Operand(imm), SetCC, al);
+  // Top half of the immediate sign extended, either 0 or -1.
+  int32_t sign_extend = imm < 0 ? -1 : 0;
+  (assm->*op_with_carry)(dst.high_gp(), lhs.high_gp(), Operand(sign_extend),
+                         LeaveCC, al);
+  if (!can_use_dst) {
+    assm->mov(dst.low_gp(), scratch);
+  }
+}
+
 template <void (TurboAssembler::*op)(Register, Register, Register, Register,
                                      Register),
           bool is_left_shift>
@@ -232,6 +254,28 @@ void LiftoffAssembler::PatchPrepareStackFrame(int offset,
   PatchingAssembler patching_assembler(AssemblerOptions{},
                                        buffer_start_ + offset,
                                        liftoff::kPatchInstructionsRequired);
+#if V8_OS_WIN
+  if (bytes > kStackPageSize) {
+    // Generate OOL code (at the end of the function, where the current
+    // assembler is pointing) to do the explicit stack limit check (see
+    // https://docs.microsoft.com/en-us/previous-versions/visualstudio/
+    // visual-studio-6.0/aa227153(v=vs.60)).
+    // At the function start, emit a jump to that OOL code (from {offset} to
+    // {pc_offset()}).
+    int ool_offset = pc_offset() - offset;
+    patching_assembler.b(ool_offset - Instruction::kPcLoadDelta);
+    patching_assembler.PadWithNops();
+
+    // Now generate the OOL code.
+    AllocateStackSpace(bytes);
+    // Jump back to the start of the function (from {pc_offset()} to {offset +
+    // liftoff::kPatchInstructionsRequired * kInstrSize}).
+    int func_start_offset =
+        offset + liftoff::kPatchInstructionsRequired * kInstrSize - pc_offset();
+    b(func_start_offset - Instruction::kPcLoadDelta);
+    return;
+  }
+#endif
   patching_assembler.sub(sp, sp, Operand(bytes));
   patching_assembler.PadWithNops();
 }
@@ -597,6 +641,12 @@ void LiftoffAssembler::FillI64Half(Register reg, uint32_t index,
                                      Register rhs) {             \
     instruction(dst, lhs, rhs);                                  \
   }
+#define I32_BINOP_I(name, instruction)                           \
+  I32_BINOP(name, instruction)                                   \
+  void LiftoffAssembler::emit_##name(Register dst, Register lhs, \
+                                     int32_t imm) {              \
+    instruction(dst, lhs, Operand(imm));                         \
+  }
 #define I32_SHIFTOP(name, instruction)                                         \
   void LiftoffAssembler::emit_##name(Register dst, Register src,               \
                                      Register amount, LiftoffRegList pinned) { \
@@ -627,12 +677,12 @@ void LiftoffAssembler::FillI64Half(Register reg, uint32_t index,
     instruction(dst, lhs, rhs);                                              \
   }
 
-I32_BINOP(i32_add, add)
+I32_BINOP_I(i32_add, add)
 I32_BINOP(i32_sub, sub)
 I32_BINOP(i32_mul, mul)
-I32_BINOP(i32_and, and_)
-I32_BINOP(i32_or, orr)
-I32_BINOP(i32_xor, eor)
+I32_BINOP_I(i32_and, and_)
+I32_BINOP_I(i32_or, orr)
+I32_BINOP_I(i32_xor, eor)
 I32_SHIFTOP(i32_shl, lsl)
 I32_SHIFTOP(i32_sar, asr)
 I32_SHIFTOP(i32_shr, lsr)
@@ -788,6 +838,11 @@ void LiftoffAssembler::emit_i32_shr(Register dst, Register src, int amount) {
 void LiftoffAssembler::emit_i64_add(LiftoffRegister dst, LiftoffRegister lhs,
                                     LiftoffRegister rhs) {
   liftoff::I64Binop<&Assembler::add, &Assembler::adc>(this, dst, lhs, rhs);
+}
+
+void LiftoffAssembler::emit_i64_add(LiftoffRegister dst, LiftoffRegister lhs,
+                                    int32_t imm) {
+  liftoff::I64BinopI<&Assembler::add, &Assembler::adc>(this, dst, lhs, imm);
 }
 
 void LiftoffAssembler::emit_i64_sub(LiftoffRegister dst, LiftoffRegister lhs,
@@ -1348,7 +1403,7 @@ void LiftoffAssembler::CallC(wasm::FunctionSig* sig,
   // a pointer to them.
   DCHECK(IsAligned(stack_bytes, kSystemPointerSize));
   // Reserve space in the stack.
-  sub(sp, sp, Operand(stack_bytes));
+  AllocateStackSpace(stack_bytes);
 
   int arg_bytes = 0;
   for (ValueType param_type : sig->parameters()) {
@@ -1434,7 +1489,7 @@ void LiftoffAssembler::CallRuntimeStub(WasmCode::RuntimeStubId sid) {
 }
 
 void LiftoffAssembler::AllocateStackSlot(Register addr, uint32_t size) {
-  sub(sp, sp, Operand(size));
+  AllocateStackSpace(size);
   mov(addr, sp);
 }
 
